@@ -1,6 +1,6 @@
 
 import shutil,os
-
+import numpy as np
 
 def ReadFile(fname):
 	f = open(fname)
@@ -27,3 +27,6 @@ def EnsureDirectoryExists(dName):
 	if not os.path.exists(dName):		
 		os.makedirs(dName)
 
+def BungleData(d):
+    d[:,1] = np.log( d[:,1] )
+    return d

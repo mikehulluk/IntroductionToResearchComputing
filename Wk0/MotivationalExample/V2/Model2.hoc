@@ -52,7 +52,7 @@ objref f
 f = new File()
 f.aopen("PropSpdResults.txt")
 
-f.printf("%f \t %f\n", 1.5, 600.0/(tV3Max - tV2Max) )
+f.printf("%f \t %f\n", soma.diam, 600.0/(tV3Max - tV2Max) )
 f.close()
 
 
