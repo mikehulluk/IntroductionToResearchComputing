@@ -1,0 +1,28 @@
+
+
+Hi Everyone,
+We are starting a new weekly meeting; Introduction to Research Computing. The style will be relaxed and a combination of discussion, hands-on examples and presentations.
+The course will be split into two parts. Initially we will be talking about practical computing; 
+ - A general introduction to Linux & Bash (Filesystem & users, environmental variables, basic commands, process control, regular expressions)
+ - An introduction to scripting with Python
+ - Version Control Systems (git/mercurial)
+ - Creating Reports Posters & Presentations (Word,Lyx,Latex,...)
+ - Producing Figures
+ - More Bash/Linux (Installing from source, pipes and IO redirection, ssh)
+ - Data dependencies and WorkFlows, introduction to databases.
+  
+After Christmas, we will talk about more software-engineering topics; refactoring code, going from scripts to libraries, testing, debugging, using design patterns, profiling.
+
+The aim is to discuss topics that are relevant to new students new to the department; although other people may be interested in coming to specific meetings, for example, Version Control Systems. ( We will send further e-mails when these topics come up ). We will be giving overviews of tools and what they can do, rather than detailed tutorials.
+
+There will be an introductory meeting on Wednesday at 2:00 in XX. 
+All are welcome to attend, if you are interested ( and NOT in the first-year DTC) could you please just drop us an email.
+
+Thanks,
+
+
+
+Mike Hull & Kryz 
+Gorgolewski
+
+
