@@ -1,0 +1,66 @@
+
+
+// Create our neuron:
+create soma
+access soma
+soma.L = 2000
+soma.diam = 1.5
+soma.nseg = 1000
+insert hh
+
+// Create the Stimulation
+objref cc 
+cc = new IClamp( 0.0 )
+cc.dur=5.0
+cc.del=50.0
+cc.amp=0.5
+
+// Record Time and Voltages:
+objref tVec, v1Vec, v2Vec, v3Vec
+tVec = new Vector()
+v1Vec = new Vector()
+v2Vec = new Vector()
+v3Vec = new Vector()
+
+v1Vec.record(& soma.v(0.2) )
+v2Vec.record(& soma.v(0.5) )
+v3Vec.record(& soma.v(0.8) )
+tVec.record(&t)
+
+
+//Run the Simulation
+tstop=100
+run()
+
+// Do a bit of very simple analysis
+mV1 = v1Vec.max_ind()
+mV2 = v2Vec.max_ind()
+mV3 = v3Vec.max_ind()
+
+tV1Max = tVec.get(mV1)
+tV2Max = tVec.get(mV2)
+tV3Max = tVec.get(mV3)
+
+print "V1 Max:", v1Vec.get(mV1), "mV   ", tV1Max,  "(",mV1,")" 
+print "V2 Max:", v2Vec.get(mV2), "mV   ", tV2Max,  "(",mV2,")" 
+print "V3 Max:", v3Vec.get(mV3), "mV   ", tV3Max,  "(",mV3,")" 
+
+
+
+// Save this to a file:
+objref f
+f = new File()
+f.aopen("PropSpdResults.txt")
+
+f.printf("%f \t %f\n", 1.5, 600.0/(tV3Max - tV2Max) )
+f.close()
+
+
+// Quit Neuron
+quit()
+
+
+
+
+
+
