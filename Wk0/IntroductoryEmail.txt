@@ -16,13 +16,12 @@ After Christmas, we will talk about more software-engineering topics; refactorin
 The aim is to discuss topics that are relevant to new students new to the department; although other people may be interested in coming to specific meetings, for example, Version Control Systems. ( We will send further e-mails when these topics come up ). We will be giving overviews of tools and what they can do, rather than detailed tutorials.
 
 There will be an introductory meeting on Wednesday at 2:00 in XX. 
-All are welcome to attend, if you are interested ( and NOT in the first-year DTC) could you please just drop us an email.
+The meeting are compulsory for first-year DTC students, but all are welcome to attend, if you are interested could you please just drop us an email.
 
 Thanks,
 
 
 
-Mike Hull & Kryz 
-Gorgolewski
+Mike Hull & Chris Gorgolewski
 
 
