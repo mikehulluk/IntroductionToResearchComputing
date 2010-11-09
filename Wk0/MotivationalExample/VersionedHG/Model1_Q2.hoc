@@ -1,0 +1,63 @@
+
+
+// Create our neuron:
+create soma
+access soma
+soma.L = 2000
+soma.diam = 1.5
+soma.nseg = 1000
+
+soma.cm = 3.0
+soma.Ra = soma.Ra * 2.0
+
+insert hh
+
+// Create the Stimulation
+objref cc 
+cc = new IClamp( 0.0 )
+cc.dur=5.0
+cc.del=50.0
+cc.amp=0.5
+
+// Record Time and Voltages:
+objref tVec
+objref v1Vec
+objref v2Vec
+objref v3Vec
+
+tVec = new Vector()
+v1Vec = new Vector()
+v2Vec = new Vector()
+v3Vec = new Vector()
+
+v1Vec.record(& soma.v(0.2) )
+v2Vec.record(& soma.v(0.5) )
+v3Vec.record(& soma.v(0.8) )
+tVec.record(&t)
+
+
+//Run the Simulation
+tstop=100
+run()
+
+
+// Save this to a file:
+objref f
+f = new File()
+f.aopen("tmp/Q2_VoltageTraces.txt")
+
+for i=0,tVec.size()-1 {
+    f.printf("%g %g %g %g\n", tVec.x(i), v1Vec.x(i), v2Vec.x(i), v3Vec.x(i) )
+}
+
+f.close()
+
+
+// Quit Neuron
+quit()
+
+
+
+
+
+
