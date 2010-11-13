@@ -1,0 +1,25 @@
+1. Questionaries: 5/7 people know bash reasonably well
+2. We'll try to show them something extra: useful tips and tricks.
+3. We'll also cover basics of writing bash scripts.
+4. If this will not cover the whole hour we'll add remote working.
+
+Bash extras:
+- adjusting bash to your needs (.bashrc, $PATH)
+PS1
+own PATH, PYTHONPATH (mention which btw)
+
+- aliases
+alias name=command
+
+- env
+echo, export, env
+
+- history
+Ctrl-R, Ctr-J, history, !22
+
+- stderr and stdout
+
+"1>", "2>", "&>"
+
+- redirecting output and pipes
+- writing scripts
