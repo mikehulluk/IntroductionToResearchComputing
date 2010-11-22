@@ -1,0 +1,7 @@
+Hello everyone,
+This week at int-res-comp, we will be talking about "Working Remotely and Synchronously". We will be introducing/covering: ssh, persistant jobs using screen, VNC, other ways to connect to informatics & afs and tools/techniques for working on multiple computers.
+The meeting will be more practical and we will be in Appleton Tower, in room. We will work on DICE, but you are welcome to bring you laptop, just make sure it has an ssh client and a vnc-client installed, and you can alreay access the university wireless network. If you have any questions you can contact Mike or Chris beforehand.
+
+
+Mike & Chris
+
