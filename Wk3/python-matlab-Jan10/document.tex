@@ -106,9 +106,9 @@ print area
 
 \begin{verbatim}
 #Example 2
-species = 'Xenopus'
-other = 'laevis'
-print 'Lets study ' + species + ' ' + other + '.'
+a = 'Xenopus'
+b = 'laevis'
+print 'Lets study ' + a + ' ' + b + '.'
 >> Lets study Xenopus laevis.
 \end{verbatim}
 
@@ -119,6 +119,30 @@ print 'Lets study ' + species + ' ' + other + '.'
 
 \section{A Brief Tour}
 \subsection{Basic Data Types}
+
+\subsection{Basic Data Types}
+\begin{frame}[fragile]
+  \frametitle{Basic Built-in Data Types}
+  \begin{itemize}
+
+    \item<1-> Integer
+    \item<2-> Float
+    \item<3-> String
+  \end{itemize}
+
+  \begin{itemize}
+    \item<4-> Lists
+    \item<5-> Dictionary
+  \end{itemize}
+
+  \begin{itemize}
+    \item<6-> Tuples
+    \item<7-> \begin{verbatim} None True False \end{verbatim}
+  \end{itemize}
+
+\end{frame}
+
+
 \begin{frame}[fragile]
   \frametitle{Basic Data Types}
 
@@ -193,22 +217,23 @@ print 'Lets study ' + species + ' ' + other + '.'
 	  \item<1-> Dictionaries map a \emph{key} to a \emph{value}
 	  \begin{list}{\quad}{}
 		  \footnotesize
-		  \item<2-> \begin{verbatim} >>> residence = { 'Mike':  'Edinburgh', 
-                   'Roman': 'Plymouth',
-                   'Debbie':'Bristol',
-                   'Azad':  'Plymouth',
-                   'Edgar': 'Bristol' } 
+		  \item<2-> \begin{verbatim} >>> channel_density = { 
+                   'soma':  1.0, 
+                   'dendrite': 0.8,
+                   'axon':0.7,
+                   'axonhillock':  1.7,
+                    }
 				   
 				   \end{verbatim}	
  		  
 	\item<3-> \begin{verbatim} 
- >>> residence['Edgar']	  \end{verbatim}	
-	\item<4-> \begin{verbatim} 'Bristol'	  
+ >>> channel_density['axon']	  \end{verbatim}	
+	\item<4-> \begin{verbatim} 0.7
 
 		\end{verbatim}	
 	\item<5-> \begin{verbatim} 
- >>> residence['Azad']	  \end{verbatim}	
-	\item<6-> \begin{verbatim} 'Plymouth'	  \end{verbatim}	
+ >>> channel_density['axonhillock']	  \end{verbatim}	
+	\item<6-> \begin{verbatim} 1.7	  \end{verbatim}	
 	  \end{list}
 
   \end{itemize}
@@ -219,21 +244,21 @@ print 'Lets study ' + species + ' ' + other + '.'
   \frametitle{Dictionary Iteration}
 
 	  \begin{list}{\quad}{}
-		  \footnotesize
-		  \item<2-> \begin{verbatim} >>> people = residence.keys() \end{verbatim}	
-		  \item<3-> \begin{verbatim} >>> people \end{verbatim}	
-		  \item<4-> \begin{verbatim} >>> ['Debbie','Edgar','Azad','Mike','Roman']  \end{verbatim}	
+		  \tiny
+		  \item<2-> \begin{verbatim} >>> regions = channel_density.keys() \end{verbatim}	
+		  \item<3-> \begin{verbatim} >>> regions \end{verbatim}	
+		  \item<4-> \begin{verbatim} >>> ['axon','dendrite','soma','axonhillock']  \end{verbatim}	
 
-		  \item<5-> \begin{verbatim} >>> for name in residence.keys():
-	        		  print name + ' lives in ' + residence[name]
+		  \item<5-> \begin{verbatim} >>> for location in residence.keys():
+	        	print location + ' has channel density ',  channel_density[location]
 			  \end{verbatim}
 
 		  \item<6-> \begin{verbatim} 
-		 Debbie lives in Bristol
-		 Edgar lives in Bristol
-		 Azad lives in Plymouth
-		 Mike lives in Edinburgh
-		 Roman lives in Plymouth  \end{verbatim}	
+		 axon has channel density 1.0
+		 dendrite has channel density 0.8
+		 soma has channel density 1.0
+		 axonhillock has a channel density 1.7
+		 \end{verbatim} 
 
 	  \end{list}
  		  
@@ -287,7 +312,7 @@ print 'Lets study ' + species + ' ' + other + '.'
   \frametitle{Human Algorithm}
   \begin{itemize}
 	%\scriptsize
-	  \item<1-> For each line in the file (wthout a parent\_id -1):
+	  \item<1-> For each line in the file (without a parent\_id -1):
 	  \begin{itemize}
 	%\scriptsize
 		  \item<2-> Find the position and radius of the parent.
@@ -595,7 +620,7 @@ print 'Total Area:', sum( segmentAreas.values() ) \end{verbatim}
   \frametitle{numpy, scipy \& matplotlib}
 
   \begin{itemize}
-  \item<1-> numpy contains basic matrix manipulation functions
+  \item<1-> numpy contains basic array and matrix manipulation functions
   \item<2-> scipy contains higher-level toolboxes
 	\begin{itemize}
   	\item<2-> signal-processing, statistics,

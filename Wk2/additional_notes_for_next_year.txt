@@ -1,0 +1,9 @@
+
+MyEd has an interface for:
+ -- accessing files
+ -- downloading articles from journals (its on the library page)
+ -- 
+
+ sftp is easier than scp for copying over ssh..
+
+
