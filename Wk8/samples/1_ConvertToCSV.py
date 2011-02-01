@@ -1,6 +1,6 @@
 import datetime
 
-f = fdate = None
+fdate = None
 for line in open("1_testdata.txt"):
   if not line: continue
   date,value = line.strip().rsplit(" ",1)
