@@ -1,0 +1,968 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0078)http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Matlab / Octave efficiency notes</title>
+    
+    <link rel="stylesheet" type="text/css" media="screen" href="./Matlab   Octave efficiency notes_files/screen.css">
+    <link rel="stylesheet" type="text/css" media="print" href="./Matlab   Octave efficiency notes_files/print.css">
+    <link rel="home" title="Home" href="http://homepages.inf.ed.ac.uk/imurray2/">
+    <link rel="icon" href="http://homepages.inf.ed.ac.uk/imurray2/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="http://homepages.inf.ed.ac.uk/imurray2/favicon.ico" type="image/x-icon">
+    <style type="text/css">
+        li { margin: 0.5ex 0em 0em 0em; }
+        pre {
+            background: #c0c0f0;
+            border: 2px solid #9090b0;
+            padding: 1em;
+            margin-left: 1em;
+            margin-right: 1em;
+        	overflow: auto;
+            overflow-Y: hidden;
+        }
+        tt {
+            background: #d0d0ff;
+        }
+    </style>
+<script>window["_GOOG_TRANS_EXT_VER"] = "1";</script></head>
+<body>
+<div class="content">
+
+<h1>Efficient Matlab and Octave</h1>
+
+<p>In March 2011 I was asked to provide a short tutorial on “writing
+efficient Matlab code”. Here are some slightly verbose notes made while
+preparing that tutorial. I’ve snuck in the odd note about good practice
+that aren’t strictly related to efficiency. There are plenty of important
+details and further topics that I don’t rehash in these notes.</p>
+
+<p id="reading"><strong>For more detail, see some of this recommended reading:</strong></p>
+<ul>
+    <li><a href="http://code.google.com/p/yagtom/">YAGTOM: Yet Another Guide TO Matlab, by Matthew Dunham and Kevin Murphy</a>.</li>
+    <li><a href="http://www.mathworks.com/support/tech-notes/1100/1109.html">The Mathwork’s vectorization guide</a>.</li>
+    <li><a href="http://www.ee.columbia.edu/~marios/matlab/matlab_tricks.html">Marios Athineos’s collection of notes</a> (some slightly dated).</li>
+    <li><a href="http://research.microsoft.com/en-us/um/people/minka/software/matlab.html">Tom Minka’s notes</a>.</li>
+    <li>My other niche Matlab/Octave pages:
+    <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/octmattricks.html">tricks</a>,
+    <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/octave_matlab.html">oddities</a>,
+    <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/R_octave.html">R&nbsp;notes</a>,
+    <a href="http://homepages.inf.ed.ac.uk/imurray2/code/#imurray-matlab">code</a>.</li>
+</ul>
+
+<h2 id="quiz">Opening Quiz</h2>
+
+<p>Here are some things to think about.</p>
+<ol>
+    <li>How would you uniformly at random sample K values from a list of N values
+    <em>without</em> replacement?</li>
+    <li>You have a large NxD data array <tt>data</tt>, (with N=1e7 say). The first
+    column consists of user IDs, integers between 1 and 1e5. A row,
+    <tt>data(n,:)</tt>, is only relevant if <tt>data(n,1)</tt> appears in
+    <tt>interesting</tt>, a Kx1 list of interesting users (K=1e3 say). How would
+    you construct <tt>subset</tt>, an array consisting of the interesting rows of
+    <tt>data</tt>?</li>
+    <li>How would you quickly find the NxM square distances between two sets of
+    D-dimensional vectors of size N and M stored in DxN and DxM arrays?
+    How about if you measure distance with different lenghscales (Mahalanobis
+    distance with a diagonal metric):
+    <i>d<sub>n,m</sub></i>&nbsp;=&nbsp;Σ<sub><i>d</i></sub>&nbsp;(<i>x<sub>d,n</sub>&nbsp;-&nbsp;x<sub>d,m</sub></i>)²&nbsp;/&nbsp;<i>l<sub>d</sub></i>²</li>
+    <!-- $d_{n,m} = \sum_{d=1}^D (x_{d,n} - x_{d,m})^2 / l_d^2$ -->
+    <li>You are given a list of N positive integers <tt>class=[1,9,3,4,...]</tt>.
+    Find a neat way to get a logical NxK array, with only one true
+    element in each row, where row <tt>n</tt> should be true in column number
+    <tt>class(n)</tt>.</li>
+    <li>You are given <tt>X</tt>, an NxD matrix of D-dimensional locations, and
+    <tt>Y</tt>, an Nx1 vector of values at those locations. Lots of the rows of
+    X are identical. Return new arrays <tt>Xu</tt>, an MxD matrix of unique
+    D-dimensional locations, and <tt>Yu</tt>, a Mx1 vector of the sums of the Y
+    values associated with those locations.</li>
+    <li>What compiler options would you use to compile a numerical C or C++ routine,
+    and how should you link it with a <tt>mex</tt>/<tt>oct</tt> file?</li>
+</ol>
+
+<p><strong>Meta-question:</strong> (When) should we care about questions like these?</p>
+
+<p><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#quiz_answers">My answers are below</a>, but the questions will be more
+useful if you think about them for yourself first. Please
+<a href="http://homepages.inf.ed.ac.uk/imurray2/contact.html">contact me</a> if
+you have interesting alternative answers or questions, or any other comments.
+<a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#thanks">Thank you</a> to those who have helped improve this document
+already.</p>
+
+
+<h2>Contents</h2>
+
+<ul>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#when_matlab">When (not) to use Matlab and Octave</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#vectorize">Vectorization</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#profile_test">Profiling and Testing</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#boilerplate">Function documentation and input checking</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#mex_oct">C (and other) extensions: mex and oct files</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#gpu">3rd-party GPU toolkits</a></li>
+    <li style="padding-bottom: 1em;"><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#summary"><strong>Summary</strong></a></li>
+    <li style="padding-bottom: 1em;"><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#quiz_answers">Quiz Answers</a></li>
+    <li><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#thanks">Acknowledgements</a></li>
+</ul>
+
+
+<h2 id="when_matlab">When (not) to use Matlab and Octave</h2>
+
+
+<p><strong>Data types and structures:</strong> In the beginning, MATLAB the
+“MATrix LABoratory” had one data-type: a matrix of doubles. Matlab
+software is still dominated by numerical computation with matrices. Personally I
+like that. I don't want to coerce data into the right sort of vector, or data
+type. I've got very used to pushing blocks of numbers around and not having to
+worry about types. (Although I <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#boilerplate">do document the
+    size/orientation of each matrix</a>.) In other languages I’ve found
+coercing my data into the right type cumbersome, and often I’ve had to use
+far more of someone’s framework than I’d like when using one of their
+functions.</p>
+
+<p>Historically, complex data-structures haven’t been easy or efficient in
+Matlab. It is now possible to do a fair amount with structure arrays, cell arrays
+and classes. But these aren’t always particularly efficient. <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#profile_test">Profile your code</a>! Sometimes it is necessary to
+resort to <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#mex_oct">linking with other languages</a>. If much of your
+code is heavy on complicated data-structures then Matlab/Octave may not be
+the way to go. (e.g., Matlab only recently got native
+hash tables, and Octave doesn’t ship with them!)</p>
+
+<p id="free"><strong>Free vs Proprietary:</strong> Octave is <a href="http://www.fsf.org/about/what-is-free-software">Free Software</a>,
+whereas Matlab is closed source, cannot be modified and costs money. The
+relative political/ethical importance of this distinction I’ll leave up to
+you. But some practical pros and cons of Matlab/Octave directly relate to
+their commercial/free development models.</p>
+
+<p>Dealing with licenses: the license manager that Matlab uses is annoying to
+set up. The toolboxes that Mathworks sell are expensive and so most institutions
+never have quite enough copies. Then you find your code bombs out because you
+used a trivial function, like <tt>range</tt>, which you could have implemented
+yourself in one or two lines if you had realized it was part of an expensive
+toolbox. This sort of thing punishes me for paying for software. If after
+writing your code you want to deploy jobs across a high-performance cluster, you
+may have to worry about licenses again.</p>
+
+<p>Some parts of Matlab and Octave are very similar: they use a lot of the same
+underlying libraries. Performance of vectorized code is similar under both,
+reflecting the underlying BLAS library. Overall I do run things in Matlab when
+available though, as it is much faster at interpreting loop-heavy code. There
+can be surprising differences. I have had lots of numerical trouble with
+Matlab’s quadrature routines, when Octave’s have worked fine, even
+though they use the same underlying library! Of course Octave, like
+any complex software system, has buggy routines too.</p>
+
+<p><strong>Installing binaries:</strong> Matlab comes pre-compiled and linked
+with a barrage of required libraries. In some ways this makes it Just Work. But
+because it doesn't play nicely with the surrounding operating system, <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#linking">linking</a> extensions can be a pain and getting updates
+doesn’t happen automatically. At the time of writing I was six Matlab
+releases behind the current version. And a recent experience with a collaborator
+was that <a href="http://homepages.inf.ed.ac.uk/imurray2/code/matlab_octave_missing/bsxfun.m">I
+couldn’t even assume they had bsxfun</a>. Why should they buy an upgrade
+just to run one bit of code from me as a one-off? So I had to waste time writing
+a <a href="http://homepages.inf.ed.ac.uk/imurray2/code/matlab_octave_missing/bsxfun.m">compatibility
+    stub</a>. (Although my code would have worked in Octave, that wasn’t
+installed and I didn’t have access to set it up.)</p>
+
+<p><strong>Backwards compatibility</strong> has a pretty good history in Matlab.
+I have used research code from more than a decade ago with minimal or no
+tweaking. I think commercial systems often feel a very strong pressure to
+keep their big customers happy, even when it means keeping warts in the
+language. What are the chances that some Python+numpy+scipy code will work in
+&gt;10 years time? Octave hasn’t always been so Matlab compatible. In shifting
+to Matlab-compatibility as a project goal, old Octave code has been broken. Code
+written now that targets the large subset of the language that is supported by
+Matlab and Octave is likely to be runnable (perhaps with minimal tweaking) for
+some time to come.</p>
+
+<p><strong>Plotting</strong> is one of the things that Octave continues to be
+least compatible with Matlab over. On the one hand Octave plotting is now much
+more compatible with Matlab, on the other hand few of my old Octave plotting
+scripts work any more. In many programming environments, anything to do with
+displaying graphics or GUIs seems to be harder to keep working or port. As
+always, separate out functionality: don’t make your core simulation depend
+on plotting routines. Write out results and plot them separately, or make
+plotting optional and swappable with callback functions.
+For some purposes R produces much more professional looking graphics out of the
+box. Separating out your plotting routines will make it easier to redo plots in
+(say)&nbsp;R.</p>
+
+<h2 id="vectorize">Vectorization</h2>
+
+<p>Writing an expensive computation as a cryptic line or two of dense Matlab can be
+a fun puzzle. Is it worth it? Sometimes. Matlab’s JIT means it’s sometimes
+unnecessary or worse. <strong>Always <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#profile_test">profile and test</a>.</strong></p>
+
+<p>The references listed above are just a few of the available notes you can
+find on the web. Here I just provide a checklist of things you may want to look
+into if you are unsure about them.</p>
+
+<p><strong>logical, integer and subscript indexing:</strong> know how they all
+work and how to use:</p>
+<ul>
+    <li><tt>find</tt>, when (not) to use it</li>
+    <li><tt>:</tt></li>
+    <li><tt>sub2ind</tt>, <tt>ind2sub</tt> (and maybe my <tt><a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/subv2ind.m">subv2ind</a></tt>, <tt><a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/ind2subv.m">ind2subv</a></tt>)</li>
+</ul>
+<p><strong>Frequently used functions for vectorizing:</strong></p>
+<ul>
+    <li><tt>bsxfun</tt> (often used where we used to use <tt>repmat</tt>)</li>
+    <li><tt>histc</tt></li>
+    <li><tt>unique</tt> (sometimes slower than it should be)</li>
+    <li><tt>ones</tt>/<tt>true</tt> and <tt>zeros</tt>/<tt>false</tt></li>
+    <li><tt>reshape</tt>, <tt>vec=@(x)x(:);</tt></li>
+    <li><tt>cumsum</tt></li>
+    <li><tt>accumarray</tt></li>
+    <li><tt>diff</tt> (slightly neater than doing yourself with indexing)</li>
+    <li>Others? Often mentioned, but I haven’t used much:
+    <tt>vectorize</tt>, <tt>filter</tt>, <tt>kron</tt>, <tt>meshgrid</tt></li>
+</ul>
+
+<p>If you’re a functional programming fan you may like to
+play around with cell arrays and the “map” functions
+<tt>cellfun</tt>, <tt>arrayfun</tt>, etc. Sometimes these allow neat, fast
+code. If you have arranged computations like this, it should be easier to
+parallelize them. Octave-forge contains a parallel version of <tt>cellfun</tt>: <a href="http://octave.sourceforge.net/general/function/parcellfun.html"><tt>parcellfun</tt></a>.</p>
+
+<p>You could consider using <tt>sparse</tt> arrays to vectorize some operations
+that may not naturally map onto dense linear algebra operations.</p>
+
+<p><strong>Pre-allocation</strong>. If you must use a for loop, try not to grow an array inside it:</p>
+<pre>X = zeros(1, N);
+for nn = 1:N
+    X(nn) = fn(nn);
+end
+% Do NOT do:
+X = [];
+for nn = 1:N
+    X = [X fn(nn)];
+end</pre>
+<p>Sometimes you have to guess how big the array will be. It is usually faster
+to make it too big, or double the length every time it fills up, and trim at the
+end.</p>
+
+
+<h2 id="profile_test">Profiling and Testing</h2>
+
+<p><strong>Time individual snippets</strong> with:</p>
+<ul>
+    <li><tt>tic; stuff(); wallclock_time_taken = toc</tt></li>
+    <li><tt><a href="http://www.mathworks.com/matlabcentral/fileexchange/18798">timeit</a>(@() stuff(), 0)</tt> — more careful and less variable timings.</li>
+</ul>
+<p>The second argument to <tt><a href="http://www.mathworks.com/matlabcentral/fileexchange/18798">timeit</a></tt>
+is to <a href="http://savannah.gnu.org/bugs/?32700">make it work in Octave</a>.
+Which snippets should you be bothering to time?</p>
+<ul>
+    <li><strong>Use Matlab’s built-in graphical profiler.</strong> It is
+    awesome and happens to be the only part of the Matlab GUI (besides plot
+    windows) that I use. Most computer time is usually spent in a small part of your code,
+    and which parts are really slow can be surprising.</li>
+    <li>Don’t take it on trust that a 3rd-party “fast” replacement of a
+    Matlab primitive actually <em>is</em> still faster in current Matlab.
+    Benchmark it!</li>
+</ul>
+
+<p id="testcases"><strong>Write test-cases</strong> to check that versions of your code are
+really producing the same output as each other. Also check on small cases you
+can solve by hand.</p>
+
+<p>I put tests in a sub-directory called testing. If I start Matlab there I can
+still see my project’s code because my <tt>startup.m</tt> includes:</p>
+<pre>% If in a testing directory, add the parent directory to the Matlab path.
+% This makes it easier to separate out tests into a subdirectory.
+% Then I'm less likely to delete the tests and more likely to run them.
+if regexp(pwd,'/test(ing|s|)(|_)(|stuff|rig)$')
+    try
+        addgenpath('..'); % cleverer version from my Matlab toolbox
+    catch
+        addpath(genpath('..'));
+    end
+end</pre>
+<p>If “shipping” my code, I create a startup.m in the testing directory:</p>
+<pre>% run usual startup script
+startups = which('startup', '-ALL');
+if length(startups) &gt; 1
+    run(startups{2})
+end
+
+% Add the parent directory (the project I'm testing) to the Matlab path
+oldpwd = pwd;
+cd ..
+try; addgenpath(pwd); catch; addpath(genpath(pwd)); end
+cd(oldpwd);
+
+clear startups oldpwd ans</pre>
+
+<p><strong>Does your code work if some of your array dimensions happen to be one
+or zero?</strong> 1)&nbsp;Always specify the <tt>dim</tt> argument in
+functions like <tt>sum</tt> unless you <em>know</em> you will always be
+processing a vector, otherwise the summing direction might switch for some
+inputs. 2)&nbsp;Know that Matlab cannot explicitly have ND-arrays with trailing
+singleton dimensions, but that most functions allow you to access an arbitrary
+number of trailing singleton dimensions as if they were there:</p>
+<pre>&gt;&gt; A = zeros(4,3,2,1);
+&gt;&gt; sz = size(A)
+sz =
+     4     3     2
+&gt;&gt; sz(4) % bug, because last dimension has length 1 and didn't appear
+??? Attempted to access sz(4); index out of bounds because numel(sz)=3.
+
+&gt;&gt; size(A,4)
+ans =
+     1
+&gt;&gt; size(A,5) % implicitly exists even though you didn't put it there
+ans =
+     1</pre>
+<p>3)&nbsp;Don’t use <tt>squeeze</tt>, which can
+squeeze dims you didn’t intend. Instead <tt>permute</tt> the singleton
+dimensions you want to squeeze to the end of your ND-Array, where they become
+invisible.</p>
+
+<p><strong>Matlab computations can produce <tt>NaN</tt>, <tt>Inf</tt> and
+complex numbers</strong>. Is your code correct in those cases? It can be
+hard to see where these esoteric numbers came from when they pop out as a final
+result. Typing <tt>dbstop naninf</tt> in Matlab causes a breakpoint whenever a
+<tt>NaN</tt> or <tt>Inf</tt> is produced. Putting
+<tt>log=@reallog;sqrt=@realsqrt;</tt> at the top of your functions prevents
+common sources of unintended complex numbers.</p>
+
+<h2 id="boilerplate">Function documentation and input checking</h2>
+
+<p>When optimizing a snippet of code, it’s often useful to separate it out
+into a meaningful function. This allows alternatives to be swapped in more
+neatly, it encourages you to document what you are doing, the code can more
+easily be passed to
+<tt><a href="http://www.mathworks.com/matlabcentral/fileexchange/18798">timeit</a></tt>,
+and it is easier to separately call the code from a
+<a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#testcases">test&nbsp;case</a>.</p>
+
+<p>A block of comments immediately beneath a function declaration is returned by
+the Matlab <tt>help</tt> command. The first line is returned by the
+<tt>lookfor</tt> command. This first line is conventionally the function name in capitals
+(yuck) followed by a short description. As a minimum I usually add an example of
+the function being used and a list of the sizes of all the input and output
+arrays. For a minimal example, see my <a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/unique_totals.m">unique_totals.m</a>
+function. Creating these headers can be tedious, but I’ve found them
+worthwhile. For example is the input data matrix NxD, as standard for a <a href="http://en.wikipedia.org/wiki/Design_matrix">design matrix</a> in
+statistics, or DxN adjacent column vectors which keeps
+data cases together in memory? People do both. I have done both. I pipe my function
+header into a Python(!) program to help me make the documentation that keeps me
+sane: <a href="http://homepages.inf.ed.ac.uk/imurray2/code/hacks/docmatlab">docmatlab</a>,
+<a href="http://homepages.inf.ed.ac.uk/imurray2/code/hacks/docmatlab.example.txt">example</a>.</p>
+
+<p>The beginning of a function often has quite a bit of fairly boring code to
+check the number and sizes of arguments, fill in default values, pre-process
+arrays for the intended algorithm and so on. There is a tension between
+efficiency and robustness/clarity. For example I have an m-file <a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/DEFAULT.m">DEFAULT.m</a>,
+which allows me to do this:</p>
+<pre>function [xx, yy, zz] = blah(aa, bb, cc, dd)
+DEFAULT('bb', zeros(size(aa)));
+DEFAULT('dd', 0);
+...
+
+
+&gt;&gt; blah(aa, [], cc); % 2nd &amp; 4th arguments initialized to default values</pre>
+<p>I find using <tt>DEFAULT</tt> clearer and shorter than manually putting in
+the logic to see if <tt>bb</tt> is defined and assigning a value if not.
+However, <tt>DEFAULT</tt> adds even more overhead than these checks would
+already have, which can cause a problem if the function is called frequently. I
+rely on profiling to tell me when this is really an issue.</p>
+
+<p>One common pattern is that a function is called many times, in a loop or
+recursively with similar arguments. After the first valid call, the arguments
+might be guaranteed to be valid and complete given what has gone before. In
+these cases I have an end-user facing function with extensive argument checking.
+This front-end function only checks the user-provided arguments once and then
+carefully drives an internal/private function many times. This internal function
+has minimal checking.</p>
+<pre>function [xx, yy, zz] = sprocket_solver(lots, of, args)
+% Documentation
+% Extensive arg checking and processing
+
+for big_loop = 1:maybe_lots
+    sprocket_helper(pre, processed, args);
+end
+
+function sprocket_helper(pre, processed, args)
+% We now get on with some serious work with little arg-checking.
+% sprocket_helper might call itself recursively, but sprocket_solver
+% shouldn't because it has lots of arg-checking overhead.</pre>
+<p>Most of Matlab’s library routines do a lot of checking, and are quite
+general. If you are sure of your input, only need a simple case, and call the
+function often, then writing your own version can give a speedup. Although
+realize that you will be throwing away
+<a href="http://blogs.mathworks.com/loren/2008/02/07/why-hypot/">some
+of the care</a> that has gone into writing seemingly trivial functions.</p>
+
+
+<h2 id="mex_oct">C (and other) extensions: mex and oct files</h2>
+
+<p>First, question whether you really want to write some of your code in another
+language. What are the chances that it and all its dependencies will compile and
+link cleanly with Matlab/Octave on a different system? How about 10 years from
+now?</p>
+
+<p>Second, question whether you can actually write fast C code. If your
+algorithm involves large matrix operations, you may have to call optimized BLAS
+routines to do some of the work, or you risk being outperformed by the m-file
+that you are trying to replace.</p>
+
+<p>There is fairly neat Java (and now C#) integration in Matlab. Using these
+features could help with Matlab’s limited data-structure support. However,
+I’m not much of a fan of Java and these language interfaces aren’t
+compatible with Octave, so personally I avoid them.</p>
+
+<p>Personally, if I want to write low level code I tend to do it in
+‘plain&nbsp;C’ (ANSI&nbsp;C, or&nbsp;C99). It’s much less
+hassle to <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#linking">link</a> than C++, compiles much faster, and the
+compilers tend to give me more interpretable error messages.</p>
+
+<h3 id="mex">Matlab extension basics</h3>
+
+<p>Matlab comes with a script called <tt>mex</tt> to compile and link
+C/C++/Fortran extensions. Matlab also exposes a command called <tt>mex</tt> within
+Matlab, which seems to do the same thing as calling the command via,
+<tt>system('mex')</tt>. I’ve had most success calling the command from
+within Matlab; <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#linking">linking</a> correctly can be tricky, and you’re more
+likely to get the environment set up correct if compiling within Matlab.</p>
+
+<p>You’ll need to look at the documentation and find examples to copy and paste.
+But here are some notes to orientate you. A mex C program needs to contain:</p>
+<pre>#include "mex.h"
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
+{
+    /* main code */
+}</pre>
+<p>Rather than a <tt>main()</tt> routine. As you would expect, plhs and prhs are
+arrays of pointers to mex-defined datatypes. There are a bunch of functions in
+the Matlab documentation beginning with <tt>mex</tt>, which are general routines for
+interfacing with Matlab. The routines to do with manipulating <tt>mxArray</tt>s
+all begin with <tt>mx</tt>.</p>
+
+<p>There are some example programs in the
+<tt>&lt;MATLAB&gt;/extern/examples/mex</tt> directory. You can probably copy and
+paste one of those to form the basis of your first simple mex file. Here is an example
+program to perform an elementwise function to a general ND-Array:</p>
+<pre>#include "mex.h"
+
+void my_element_wise_function(double* inputs, double* answer, int nn);
+
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
+{
+    const mxArray *mxIn;
+    double *outArray, *inArray;
+    int nIn;
+
+    if (nrhs!=1)
+        mexErrMsgTxt("There must be one and only input.");
+    if (nlhs&gt;1) /* can be "zero", in which case Matlab allows one */
+        mexErrMsgTxt("There must be one and only output.");
+
+    /* get information about the input */
+    mxIn = prhs[0];
+    inArray = mxGetPr(mxIn);
+    nIn = mxGetNumberOfElements(mxIn);
+
+    /* create output the same size as the input */
+    plhs[0] = mxCreateNumericArray(
+            mxGetNumberOfDimensions(mxIn),
+            mxGetDimensions(mxIn),
+            mxDOUBLE_CLASS, mxREAL);
+    outArray = mxGetPr(plhs[0]);
+
+    my_element_wise_function(inArray, outArray, nIn);
+}</pre>
+<p>Where <tt>my_element_wise_function</tt> could be defined in a separate C
+file. This lets me write and test it in a C standalone program without worrying
+about mex, before finally linking:</p>
+<pre>system('gcc -c my_func.c');
+mex my_mex_file.c my_func.o</pre>
+<p>Given the above code, it might be tempting to try to modify <tt>inArray</tt>
+in place. There is no supported way of doing this. If you write a mex file that
+does that anyway, here is what can happen:</p>
+<pre>&gt;&gt; A = 1
+A =
+     1
+&gt;&gt; B = A % Matlab internally does copy-on-write, so just points to A
+B =
+     1
+&gt;&gt; modify_in_place(A); A
+A =
+    2.7183
+&gt;&gt; B % B still points to A's memory; Matlab didn't notice the change
+B =
+    2.7183</pre>
+<p>There are hacks to avoid this, (do <tt>A(1)=A(1);</tt> before calling the mex
+file on <tt>A</tt>), but they aren’t guaranteed to stay working.</p>
+
+<h3 id="oct">Octave extension basics</h3>
+
+<p>Octave has a mex compatibility layer. Use:</p>
+<pre>mkoctfile --mex</pre>
+<p>in place of <tt>mex</tt>. In Debian/Ubuntu you may need to install the
+<tt>octave-headers</tt> package to get <tt>mkoctfile</tt>. It doesn’t
+support everything, but for simple mex files it seems to work fine.</p>
+
+<p>Octave’s mex files have more overhead time than in Matlab, partly
+because of compatibility conversions, but partly because Octave doesn’t
+trust you not to alter the inputs, so unnecessarily copies them before giving
+them to you. Some, but not all, of this overhead can be removed by writing a
+native oct extension. If you separate out the main work of your routine into a
+standalone .c or .cc file, writing an extra interface stub is very little work.
+See <tt>tl_exp.cc</tt> in <a href="http://homepages.inf.ed.ac.uk/imurray2/code/fast_exp.tar.gz">fast_exp</a>,
+which is almost entirely boiler-plate, for an example.</p>
+
+<p><a href="http://www.gnu.org/software/octave/doc/interpreter/Oct_002dFiles.html">The
+documentation</a> for writing Octave extensions seems a little thin. However,
+the <tt>examples</tt> directory is very useful. In Debian/Ubuntu it is
+currently installed in <tt>/usr/share/doc/octave3.2-headers/examples</tt>, or
+you could grab the source tarball from the Octave website.</p>
+
+<h3 id="cdebug">Debugging C code</h3>
+
+<p>It’s all too easy with C (or&nbsp;C++) to mis-use memory and get random
+crashes (‘segmentation faults’, ‘bus errors’, etc.) some
+time after the mistake was actually made. These mistakes are now easy to find!
+Compile a C program with <tt>-g</tt> to include debug symbols and run it through
+<a href="http://valgrind.org/">valgrind</a>:</p>
+<pre>valgrind ./my_program</pre>
+<p>It usually tells you the precise line on which you made your mistake. In fact
+valgrind works regardless of which compiled language you used to make
+<tt>my_program</tt>.</p>
+
+<p>In theory you can run your whole Matlab session inside valgrind...in fact in
+desperation I have done this once (see the man page about tracing children). But
+this is problematic because a)&nbsp;valgrind slows everything down dramatically
+so loading Matlab and doing anything takes <em>ages</em>; b)&nbsp;valgrind
+throws up so many warnings to do with Matlab itself, finding <em>your</em>
+transgressions is tricky.</p>
+
+<p>It is <em>strongly</em> recommended that you find all the mistakes that you
+can in your code before attempting to run it inside Matlab. Make your main
+functions take normal C arrays rather than Matlab data types, and make a small
+standalone program to exercise your code for testing. After perfecting your C
+routine, <em>then</em> write a thin Matlab interface in a separate .c file. The
+interface obtains pointers to the input and output data and calls your C
+routine, which itself doesn’t need to know anything about mex. This will
+make it easier for you to use your C code in other places. For example you could
+write a Python wrapper, or write a .cc file giving a native Octave interface
+(rather than forcing Octave to use its Matlab compatibility interface).</p>
+
+<p>Another useful C debugging tool is mudflap (should come with gcc, but in
+Debian/Ubuntu I had to install a package called <tt>libmudflap0-4.4-dev</tt>):</p>
+<pre>gcc -g -fmudflap -lmudflap main.c -o my_program</pre>
+<p>The program runs much faster than under valgrind, but still reports
+memory mistakes, sometimes catching ones that valgrind misses, sometimes missing ones
+valgrind gets. Note: valgrind will not work on programs linked with mudflap; do
+a normal "production" build before testing with valgrind.</p>
+
+
+<h3 id="compilers">C/C++ compilers and their options</h3>
+
+<p>How much do you care about numerical correctness, IEEE floating point
+conformance, etc.? This will guide some of your compiler options. For example:
+<tt>-mieee-with-inexact</tt> means you really want very strict IEEE conformance,
+even on hardware where this is slow (I don’t), whereas
+<tt>-ffast-math</tt> says you don’t care about a bunch of correctness
+concerns.</p>
+
+<p>A <tt>gcc</tt> compiler option I’ve sometimes found <em>really</em> important on x86 or
+i686 architectures is <tt>-msse2</tt>. This flag allows the compiler to
+automatically vectorize some floating point operations, potentially giving a large speed-up. <tt>gcc</tt>
+doesn’t turn on the option by default because <a href="http://en.wikipedia.org/wiki/SSE2#Notable_IA-32_CPUs_not_supporting_SSE2">the
+    required instructions are not implemented by all 32-bit processors</a>. Although the
+flag is turned on by default for <tt>x86_64</tt>.</p>
+
+<p><strong>To avoid keeping track of processor flags</strong>, and which CPU I
+need for them to work, I tend to compile with <tt>-march=native</tt>, which means
+“use whatever the CPU in this machine can support”. Be careful if
+transferring binaries to other machines however.</p>
+
+<p>I usually use the <tt>-O2</tt> optimization flag. The <tt>-O3</tt> flag
+sometimes makes things better, but can make things worse and has a reputation
+for being more buggy.</p>
+
+<p>I often turn on all the warning and <tt>-pedantic</tt> flags I can without
+getting too irritated.</p>
+
+<p>I’ve heard informally that the <a href="http://software.intel.com/en-us/articles/intel-compilers/">Intel
+    compilers</a> sometimes produce much faster code than <tt>gcc</tt>.
+It’s not very expensive for academic use, but academic use <em>cannot</em>
+use the free personal license (last time I checked). I value my time, and have
+never bothered sorting out a purchase and fighting
+with licenses.</p>
+
+<h3 id="linking">Building mex/oct and linking</h3>
+
+<p>C++ is notoriously binary incompatible between versions. Matlab won’t
+have been compiled with the same compiler as installed on your system. If you
+compile C++ mex files on your system and try to use them they <em>often</em>
+won’t work. Currently I have Matlab aliased to start like this:</p>
+<pre>LD_PRELOAD='/lib/libgcc_s.so.1:/usr/lib/libstdc++.so.6.0.13:/lib/libz.so.1.2.3.3' matlab</pre>
+<p>This line causes Matlab to use my system's libraries and made some C++ mex
+file work. It could cause other problems, and might not fix things for you.
+There are various solutions on the Mathworks tech support forums and elsewhere
+on the web. Searching for the error message that you get will probably find
+something that works. I have much better luck with C mex files.</p>
+
+<p>It’s still possible to break C mex files by linking them incorrectly
+though. Recently any time I tried to display a diagnostic with
+<tt>mexErrMsgTxt</tt>, my whole Matlab session bombed out with:</p>
+<pre>terminate called after throwing an instance of 'MathWorks::System::SimpleException'
+zsh: abort      LD_PRELOAD= matlab -nodesktop -nosplash</pre>
+<p>The reason was that I had accidentally overridden mex’s carefully-set CFLAGS. The mex
+file could be compiled correctly from within Matlab (on Linux) in either of
+these two ways:</p>
+<pre>mex CFLAGS="\$CFLAGS -march=native -O2" mymexfile.c
+% or:
+system('mex CFLAGS=''$CFLAGS -march=native -O2'' mymexfile.c');</pre>
+<p>But not including the <tt>$CFLAGS</tt>, or failing to escape the <tt>$</tt>
+in precisely the right way, caused the problem above. Note that
+<tt>mkoctfile</tt> uses <tt>CFLAGS</tt> set in the environment of your shell.
+The same escaping doesn’t work, but you can augment the <tt>CFLAGS</tt> it
+would normally use like this:</p>
+<pre>system('CFLAGS="-march=native $(mkoctfile -p CFLAGS)" mkoctfile --mex mymexfile.c')</pre>
+<p>Remember that for C++ you actually want to specify <tt>CXXFLAGS</tt>.</p>
+
+<p>Octave usually doesn’t give nearly as many linking or compilation
+problems as Matlab. Octave is likely to have been built with the same compiler
+as installed on your system (at least if installed through a Linux distribution
+or self-compiled), so there are fewer sources of incompatibility.</p>
+
+<h3 id="openmp">OpenMP / multithreading C code</h3>
+
+<p>Multithreading is easy in a mex file: ‘just’ write multithreaded
+C code and then link it in. OpenMP allows you to parallelize some for loops by
+adding a single annotation and compiling with the right flags. See
+<tt>tl_omp_exp</tt> in <a href="http://homepages.inf.ed.ac.uk/imurray2/code/fast_exp.tar.gz">fast_exp</a>
+for an example.</p>
+
+<p>As noted elsewhere on this page, multithreading isn’t necessarily a
+good idea for overall performance though. Also the Matlab API isn’t thread
+safe. Don’t try to call any mex or mx functions within threaded code. Same
+goes for the Octave API.</p>
+
+<h2>‘Embarassingly-parallel’ batch jobs</h2>
+
+<p>This probably isn’t a popular opinion with readers who’ve come to
+learn about parallel code, but: <em>often I think simple single-threaded code is
+the way to go</em>. (At least when using CPUs. And of course there are exceptions.)</p>
+
+<p>When developing code I run simple, fast test cases so that I have some hope
+my code is correct. By the time I have serious computations to run, I probably
+have a grid of parameter settings, or a variety of control experiments to try
+out. Then I can run these experiments as independent parallel jobs. Matlab can
+now automatically use than one CPU for a single job, but this can be a bad idea.
+Running two jobs sequentially using two threads for each job is usually slower
+for me than running the jobs in parallel with one thread each.</p>
+
+<p><em>Aside, detail on this claim:</em> Super-linear speedups from
+multi-threading are possible due to cache effects. Also running two jobs in
+parallel might not work well if you need all your memory or shared cache for one
+job. But for my jobs, running parallel single-threaded jobs usually works best.
+Some algorithms (such as that used by <tt>eigs</tt> in Matlab) are memory bound
+and throwing more cores at them won’t help. If your code has some things
+that can’t be multi-threaded well, then some of your cores will spend some
+time sitting idle or pointlessly thrashing. Then, assuming you have more than
+one experiment to run, <em>not</em> doing multi-threading is faster over-all. I
+turn off multi-threading for production runs. Turning off multi-threading can
+also make profiling much less confusing.</p>
+
+<p>In Matlab you can currently specify that you want single-threading with:</p>
+<pre>maxNumCompThreads(1);</pre>
+<p>However, this function has been deprecated in favour of starting Matlab with</p>
+<pre>matlab -singleCompThread</pre>
+<p>Although the version that I have installed doesn’t support this yet. In
+addition you may want to do <tt>setenv('OMP_NUM_THREADS','1')</tt> in your
+<tt>startup.m</tt> if anything you use is built with OpenMP support.</p>
+
+<p>Running many separate jobs in parallel across the CPUs in a machine, or
+indeed across a cluster of machines, can be hard to keep track of. Having some
+good scripts to manage things for you is important. <strong>A good experiment
+setup can be interrupted and be restarted again</strong> (because you
+realize a mistake, or because the cluster goes down).</p>
+
+<p>You can look at <tt>experiment_toolbox</tt> inside
+<a href="http://homepages.inf.ed.ac.uk/imurray2/pub/10hypers/surr_code.tar.gz">some
+code I’ve written</a>. And on request I could give you the ugly bundle
+of shell-scripts I have used to farm things over machines. But neither are
+particularly sophisticated and I’m not going to support them.</p>
+
+<p>Whatever batch system you do use, you’ll want to be able to run things from the
+command line. To run <tt>myscript.m</tt> in Matlab do:</p>
+<pre>matlab -nodisplay -r myscript -logfile myscript.log</pre>
+<p>Note <tt>myscript.m</tt> <em>must</em> end in <tt>quit</tt> or the Matlab
+session will stay open. Octave behaves like most Unix programs:
+</p><pre>octave myscript.m &gt; myscript.log</pre>
+<p>and doesn’t need you to finish <tt>myscript.m</tt> with <tt>quit</tt>,
+although doing so for Matlab compatibility does no harm.</p>
+
+<h2 id="gpu">3rd-party GPU toolkits</h2>
+
+<p>A disruptive change to computing has been the introduction of “General
+Purpose computations on Graphics Processing Units” (GPGPUs, or simply
+using GPUs). A modern desktop computer might be able to do a large computation
+250x faster on its graphics card&nbsp;(GPU) than the central processing
+unit&nbsp;(CPU). That sort of speed-up is game-changing enough that it might be
+worth some implementation effort to achieve, and I start to reconsider my
+thoughts about multi-threading (above).</p>
+
+<p>Theoretical speedups are hard to get. If you do things wrong performance can
+disastrously crash back down to CPU levels. On the other hand if you do standard
+vectorization tricks to reduce your bottlenecks to matrix operations, you might
+get a 30x speedup without having to do anything more sophisticated than get a
+library to do the linear algebra operations instead of Matlab’s
+intrinsics. That can change a month’s wait into working on your results
+the next day. (Ignoring the month you spent fighting with GPU software
+tools.)</p>
+
+<p><a href="http://www.accelereyes.com/"><strong>Jacket:</strong></a> commercial
+3rd-party GPU support for Matlab.</p>
+
+<p><a href="http://gp-you.org/"><strong>GPUmat:</strong></a>
+“freeware”, but <em>not</em> <a href="http://www.fsf.org/about/what-is-free-software">Free Software</a> (a
+real concern for long term availability and viability) 3rd party GPU support for
+Matlab. Popular with some machine learning researchers. For example Graham
+Taylor has <a href="http://www.cs.nyu.edu/~gwtaylor/code/GPUmat/">put it to good
+use</a>.</p>
+
+<p><strong>The Mathworks Parallel Processing Toolbox</strong> is introducing GPU
+support. I haven’t used it. As a separate product it’s often not
+available.</p>
+
+<p>It may be instructive to compare to the Free Software offerings for Python.
+These include the simple (which can be a good thing) <a href="http://code.google.com/p/cudamat/">cudamat</a>+<a href="http://www.cs.toronto.edu/~tijmen/gnumpy.html">gnumpy</a> and the more
+sophisticated <a href="http://deeplearning.net/software/theano/">theano</a>.</p>
+
+<p>Aside: most of the currently-available toolkits use NVIDIA’s CUDA
+language, rather than Open-CL which can run on other vendor’s cards.</p>
+
+<p>In the future will GPU support be much more built into the main libraries?
+Will CPU vectorization automatically do much of what GPUs do now? Or is it
+important to learn GPU-specific technology? Whatever the answers to these
+questions, well-organized, functionally separated code, expressed where possible
+with standard vector and matrix operations will fair well.</p>
+
+<h2 id="summary">Summary</h2>
+
+<ul>
+    <li><strong>Use the profiler</strong>.</li>
+    <li>Good code practice (separating functionality, good style, good test
+    cases, version control, etc.) is more important than ever when optimizing
+    code.</li>
+    <li>My view: for production runs and profiling purposes, turn off
+    multi-threading and do as many jobs in parallel as you have CPUs. Use
+    <tt>maxNumCompThreads(1);</tt> or <tt>matlab&nbsp;-singleCompThread</tt>,
+    depending on Matlab version, and have a good batch experiment-running system.
+    This advice won’t fit everyone.</li>
+    <li>If a hotspot is a loop, consult a vectorization guide or local expert for advice.</li>
+    <li><tt>mex</tt>/<tt>oct</tt> files have their place, but can be a headache
+    to maintain and debug. Develop the main C (or whatever) code separately,
+    with native test cases, and make the Matlab/Octave glue as thin and separate
+    as possible. Use good compiler options for your code, but be careful how you
+    link the <tt>mex</tt>/<tt>oct</tt> file. Provide good instructions for
+    others, and try to have an m-file for comparison and as a fallback.</li>
+    <li>GPUs are making a big difference for some people. But the tools are
+    immature and in a state of flux. Can you afford to wait?</li>
+</ul>
+
+<hr>
+
+<h2 id="quiz_answers" style="margin-top:3em;">Quiz Answers</h2>
+
+<p><span class="red"><em>Have you thought about the quiz questions for yourself yet?
+If not, <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#quiz">go back</a> and have a think.</em></span></p>
+
+<p><strong>1. How would you uniformly at random sample K values from a list of N values
+    <em>without</em> replacement?</strong></p><p>
+
+</p><p>The following costs O(N.log(N)):</p>
+<pre>idx = randperm(N);
+idx = idx(1:K);
+subset = values(idx);</pre>
+<p>This is simple, and if this isn’t a bottleneck I’d stop there.
+However, finding the indices of the values, <tt>idx</tt>, should have a smaller
+big-O cost. One alternative algorithm could go something like this:</p>
+<pre>opts = 1:N; % This is still O(N) right here though
+idx = zeros(K, 1); % remember to pre-allocate arrays when possible
+for kk = 1:K
+    last = (N-kk+1);
+    ii = ceil(rand()*last);
+    idx(kk) = opts(ii);
+    opts(ii) = last;
+end</pre>
+<p>This isn’t straight-forward to vectorize. (Although I think it can be
+done!) But even in Octave, without a just-in-time compiler, this loop will be
+faster than the naive algorithm for K≪N. For K≪N I get much faster
+results again by sampling with replacement &gt;K values
+until I get ≥K distinct values. Then I draw my K values
+without replacement from the smaller set using the naive algorithm.</p>
+<pre>idx = [];
+while numel(idx) &lt; K
+    % For small K/N this loop will usually run once.
+    % For larger K, the strategy should be adjusted!
+    idx = unique(ceil(rand(2*K, 1)*N)); % O(K)
+end
+idx = idx(randperm(numel(idx))); % O(K.log(K))
+idx = idx(1:K);</pre>
+<p>If building a responsible routine one would check K to avoid getting caught
+looping for a <em>very</em> long time. Perhaps replacing that magic value of 2
+with something more principled. It would take a bit of effort to make a polished
+function that deals well with large ranges of K and N.</p>
+
+<p>The statistics toolbox has a function that does exactly the required task:</p>
+<pre>subset = randsample(values, K);</pre>
+<p>Although using it could lead you into <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#free">license manager
+hell</a>. You could also do better yourself if you cared about this problem:
+the second two options I outlined above were faster for me when I tried N=1e6
+and K=1e3.</p>
+
+    <p><strong>2. You have a large NxD data array <tt>data</tt>, (with N=1e7 say). The first
+    column consists of user IDs, integers between 1 and 1e5. A row,
+    <tt>data(n,:)</tt>, is only relevant if <tt>data(n,1)</tt> appears in
+    <tt>interesting</tt>, a Kx1 list of interesting users (K=1e3 say). How would
+    you construct <tt>subset</tt>, an array consisting of the interesting rows of
+    <tt>data</tt>?</strong></p>
+
+<p>The main reason for including this exercise is that almost anything
+you might come up with involving for loops is likely to be disastrously
+slow.</p>
+
+<p>This is perhaps the most obvious way involving indexing:</p>
+<pre>subset = data(ismember(data(:, 1), interesting), :);</pre>
+<p>This code takes about a second on my computer for the problem size specified.
+A second for a one-off pre-processing step is no problem. If we had a genuine
+need for speed there is more we can do. Given that we know that
+<tt>interesting</tt> consists of integers, we can create a lookup-table to test
+membership more quickly.</p>
+<pre>num_users = 1e5;
+mask = false(num_users, 1);
+mask(interesting) = true;
+subset = data(mask(data(:,1)), :);</pre>
+<p>This solution is about 3x faster for the problem size given. The difference could
+be more extreme in other cases.</p>
+
+    <p><strong>3. How would you quickly find the NxM square distances between two sets of
+    D-dimensional vectors of size N and M stored in DxN and DxM arrays?
+    How about if you measure distance with different lenghscales (Mahalanobis
+    distance with a diagonal metric):</strong>
+    <i>d<sub>n,m</sub></i>&nbsp;=&nbsp;Σ<sub><i>d</i></sub>&nbsp;(<i>x<sub>d,n</sub>&nbsp;-&nbsp;x<sub>d,m</sub></i>)²&nbsp;/&nbsp;<i>l<sub>d</sub></i>²</p>
+    <!-- $d_{n,m} = \sum_{d=1}^D (x_{d,n} - x_{d,m})^2 / l_d^2$ -->
+
+    <p>One answer is <a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/square_dist.m"><tt>square_dist.m</tt></a>
+    in <a href="http://homepages.inf.ed.ac.uk/imurray2/code#imurray-matlab">my
+        Matlab toolbox</a>. For large arrays this has been faster than mex files
+    that ship with some Matlab toolboxes. The answer that uses the fewest flops
+    depends on the dimensionality of the vectors, I usually assume D is big. One
+    potential problem with my function is loss of numerical precision:</p>
+    <pre>&gt;&gt; x1 = 1;
+&gt;&gt; x2 = 1 + 1e-9;
+&gt;&gt; (x1-x2)^2            
+ans =
+   1.0000e-18
+&gt;&gt; x1^2 + x2^2 - 2*x1*x2
+ans =
+     0</pre>
+    <p>I usually centre my data and decided that this wouldn't be an
+    issue for me. If you grab a fast routine somewhere, will it match your
+    assumptions? Be skeptical!</p>
+
+    <p>To find the Mahalanobis distance using Dx1 or 1xD lengthscales
+    <tt>ell</tt>, simply scale the input data:</p>
+    <pre>d2 = square_dist(bsxfun(@rdivide, x1, ell(:)), bsxfun(@rdivide, x2, ell(:)));</pre>
+    <p>The <tt>(:)</tt> is a useful idiom so that you don't have to worry about
+    which way around a vector is. Note that if N and M are large this O(D(N+M))
+    work is <em>much</em> more efficient than the O(DNM) work of scaling after
+    taking the differences between vectors.</p>
+    <p>There is a general message: before scaling or shifting every element of a
+    large matrix, consider whether the shift or scale can be performed before
+    construction the matrix, or to the smaller results of applying it. For
+    example, if you are going to repeatedly multiply a large array by a scalar
+    (e.g., weight decay in neural network training) simply keep track of the
+    overall scale of the matrix in a separate scalar variable, rather than doing
+    O(NM) work every time.</p>
+
+    <p><strong>4. You are given a list of N positive integers <tt>class=[1,9,3,4,...]</tt>.
+    Find a neat way to get a logical NxK array, with only one true
+    element in each row, where row <tt>n</tt> should be true in column number
+    <tt>class(n)</tt>.</strong></p><p>
+
+</p><p>One way is to ‘pre-compute’ all possible rows, and then do lookup for the answer for each row:</p>
+<pre>row_dict = logical(eye(max(class)));
+encoding = row_dict(class, :);</pre>
+<p>If <tt>max(class)</tt> is big, the answer will be sparse, so this might be
+more appropriate:</p>
+<pre>encoding = sparse(1:numel(class), class, true);</pre>
+<p>The <tt>sparse</tt> call can be surrounded with <tt>full(...)</tt> to get a
+normal Matlab array, which is faster overall for large K. Finally here is yet another answer:</p>
+<pre>K = max(class(:));
+N = numel(class);
+encoding = false(N, K);
+encoding(sub2ind([N, K], (1:N)', class(:))) = true;</pre>
+<p>The final answer uses indexing to specify the interesting elements, which is
+often useful. Maybe these indexes could be used directly later in the
+computation rather than producing this logical array?</p>
+
+    <p><strong>5. You are given <tt>X</tt>, an NxD matrix of D-dimensional locations, and
+    <tt>Y</tt>, an Nx1 vector of values at those locations. Lots of the rows of
+    X are identical. Return new arrays <tt>Xu</tt>, an MxD matrix of unique
+    D-dimensional locations, and <tt>Yu</tt>, a Mx1 vector of the sums of the Y
+    values associated with those locations.</strong></p><p>
+
+    </p><p>There’s <a href="http://homepages.inf.ed.ac.uk/imurray2/code/imurray-matlab/unique_totals.m">an
+        answer</a> in <a href="http://homepages.inf.ed.ac.uk/imurray2/code#imurray-matlab">my Matlab toolbox</a>.
+    That was fast enough for the real-time psychophysics experiment it was being
+    used in, so I stopped. It could be made faster though because Matlab’s
+    <tt>unique</tt> function could be faster. For large D one could get a
+    speed-up by hashing the input locations in some way.</p>
+
+    <p><strong>5. What compiler options would you use to compile a numerical C or C++ routine,
+        and how should you link it with a <tt>mex</tt>/<tt>oct</tt>
+        file?</strong></p><p>
+
+    </p><p><a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#compilers">Covered above</a>.</p>
+
+<p><strong>Meta-question: (When) should we care about questions like these?</strong></p>
+
+    <p>A common answer is that one should only worry about trying out clever
+    vectorization tricks if you already have a correct version, and if profiling
+    has said a speed-up is useful. My feeling is that knowing the common tricks,
+    functions and indexing methods can help you write clearer Matlab/Octave code
+    more quickly.</p>
+
+    <p>A possible answer is that the biggest speedups come from using GPUs and
+    much of this document is a distraction. To <em>some</em> extent the GPU
+    content is low because I’m out of date and haven’t got wide
+    experience of using GPUs with Matlab to share. But having well-organized
+    code, and algorithms expressed as cache-friendly standard numerical
+    operations will always be useful, especially for porting code to a GPU.</p>
+
+    <p><strong>Sometimes most of this document is a distraction!</strong> Although I
+    generally stand by testing your code and making it clear, <em>sometimes</em>
+    almost all of the above advice about making code faster is misplaced. There
+    are several trivial “optimization strategies” that are often not
+    given nearly enough consideration. These include: <strong>Use less
+        data:</strong> do you actually need to be solving a problem on such a
+    massive scale to get the answers you need...at least Right Now?
+    <strong>Early stopping:</strong> if you are using a fancy optimizer it could
+    be that <em>most</em> of its time is spent refining significant digits you
+    don’t care about. Or worse, time could be spent overfitting. Maybe
+    running your code for less time might give you the same or better results.
+    Have you checked? <strong>Make your approach simpler:</strong> could
+    something simpler work? I refer you to, without <em>entirely</em>
+    agreeing with, <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/acton1970_rant.html">a beautiful rant</a>.</p>
+
+<hr>
+
+<h2 id="thanks" style="margin-top:3em;">Acknowledgements</h2>
+
+<p>I received useful comments, which helped improve these notes, from <a href="http://arkitus.com/Ali/">Ali Eslami</a> and <a href="http://pillowlab.cps.utexas.edu/~pillow/">Jonathan Pillow</a>. In
+addition, the various <a href="http://homepages.inf.ed.ac.uk/imurray2/compnotes/matlab_octave_efficiency.html#reading">references</a> given above will have
+influenced me.</p>
+
+<hr>
+
+<p class="nav"><a href="http://homepages.inf.ed.ac.uk/imurray2/">Iain&nbsp;Murray</a>.</p>
+
+</div>
+
+
+</body><style type="text/css">/*This block of style rules is inserted by AdBlock*/#RadAd_Skyscraper,#bbccom_leaderboard,#center_banner,#footer_adcode,#hbBHeaderSpon,#hiddenHeaderSpon,#navbar_adcode,#rightAds,#rightcolumn_adcode,#top-advertising,#topMPU,#tracker_advertorial,.ad-now,.dfpad,.prWrap,[id^="ad_block"],[id^="adbrite"],[id^="dclkAds"],[id^="ew"][id$="_bannerDiv"],[id^="konaLayer"],a.kLink span[id^="preLoadWrap"].preLoadWrap,a[href^="http://ad."][href*=".doubleclick.net/"],a[href^="http://adserver.adpredictive.com"],div#adxLeaderboard,div#dir_ads_site,div#FFN_Banner_Holder,div#FFN_imBox_Container,div#p360-format-box,div#rhs div#rhs_block table#mbEnd,div#rm_container,div#tads table[align="center"][width="100%"],div#tooltipbox[class^="itxt"],div[class^="dms_ad_IDS"],div[id^="adKontekst_"],div[id^="google_ads_div"],div[id^="kona_"][id$="_wrapper"],div[id^="sponsorads"],div[id^="y5_direct"],iframe.chitikaAdBlock,iframe[id^="dapIfM"],iframe[id^="etarget"][id$="banner"],iframe[name^="AdBrite"],iframe[name^="google_ads_"],img[src^="http://cdn.adnxs.com"],ispan#ab_pointer,object#flashad,object#ve_threesixty_swf[name="ve_threesixty_swf"],table[cellpadding="0"][width="100%"] > * > * > * > div[id^="tpa"],#A9AdsMiddleBoxTop,#A9AdsOutOfStockWidgetTop,#A9AdsServicesWidgetTop,#ADSLOT_1,#ADSLOT_2,#ADSLOT_3,#ADSLOT_4,#AD_CONTROL_22,#ADsmallWrapper,#Ad160x600,#Ad2,#Ad300x250,#Ad3Left,#Ad3Right,#Ad3TextAd,#AdA,#AdArea,#AdBanner_F1,#AdBar,#AdBar1,#AdC,#AdContainer,#AdContainerTop,#AdContentModule_F,#AdDetails_GoogleLinksBottom,#AdDetails_InsureWith,#AdE,#AdF,#AdFrame4,#AdG,#AdH,#AdI,#AdJ,#AdLeaderboardBottom,#AdLeaderboardTop,#AdMiddle,#AdMobileLink,#AdRectangle,#AdSenseDiv,#AdServer,#AdShowcase_F1,#AdSky23,#AdSkyscraper,#AdSponsor_SF,#AdSubsectionShowcase_F1,#AdTargetControl1_iframe,#AdText,#AdTop,#AdTopLeader,#Ad_BelowContent,#Ad_Block,#Ad_Center1,#Ad_Right1,#Ad_RightBottom,#Ad_RightTop,#Ad_Top,#Adrectangle,#Ads,#AdsContent,#AdsRight,#AdsWrap,#Ads_BA_CAD,#Ads_BA_CAD2,#Ads_BA_CAD_box,#Ads_BA_SKY,#Ads_CAD,#Ads_OV_BS,#Ads_Special,#AdvertMPU23b,#AdvertPanel,#Advertorial,#Advertorials,#BannerAd,#BannerAdvert,#BigBoxAd,#BodyAd,#BotAd,#Bottom468x60AD,#ButtonAd,#CompanyDetailsNarrowGoogleAdsPresentationControl,#CompanyDetailsWideGoogleAdsPresentationControl,#ContentAd,#ContentAd1,#ContentAd2,#ContentAdPlaceHolder1,#ContentAdPlaceHolder2,#ContentAdXXL,#ContentPolepositionAds_Result,#DivAdEggHeadCafeTopBanner,#FooterAd,#FooterAdContainer,#GoogleAd1,#GoogleAd2,#GoogleAd3,#GoogleAdsPresentationControl,#GoogleAdsense,#Google_Adsense_Main,#HEADERAD,#HOME_TOP_RIGHT_BOXAD,#HeaderAD,#HeaderAdsBlock,#HeaderAdsBlockFront,#HeaderBannerAdSpacer,#HeaderTextAd,#HeroAd,#HomeAd1,#HouseAd,#ID_Ad_Sky,#JobsearchResultsAds,#Journal_Ad_125,#Journal_Ad_300,#KH-contentAd,#LargeRectangleAd,#LeftAd,#LeftAdF1,#LeftAdF2,#LftAd,#LoungeAdsDiv,#LowerContentAd,#MainSponsoredLinks,#Nightly_adContainer,#NormalAdModule,#OverrideAdArea,#PREFOOTER_LEFT_BOXAD,#PREFOOTER_RIGHT_BOXAD,#PageLeaderAd,#RelevantAds,#RgtAd1,#RightAd,#RightBottom300x250AD,#RightNavTopAdSpot,#RightSponsoredAd,#SectionAd300-250,#SectionSponsorAd,#SideAdMpu,#SidebarAdContainer,#SkyAd,#SpecialAds,#SponsoredAd,#SponsoredLinks,#TOP_ADROW,#TOP_RIGHT_BOXAD,#Tadspacefoot,#Tadspacemrec,#Top468x60AD,#TopAdBox,#TopAdContainer,#TopAdDiv,#TopAdPos,#VM-MPU-adspace,#VM-footer-adspace,#VM-header-adspace,#VM-header-adwrap,#XEadLeaderboard,#XEadSkyscraper,#YahooAdParentContainer,#_ads,#about_adsbottom,#abovepostads,#ad-120x600-sidebar,#ad-120x60Div,#ad-160x600,#ad-160x600-sidebar,#ad-250,#ad-250x300,#ad-300,#ad-300x250,#ad-300x250-sidebar,#ad-300x250Div,#ad-300x60-1,#ad-376x280,#ad-728,#ad-728x90-leaderboard-top,#ad-728x90-top0,#ad-ads,#ad-article,#ad-banner,#ad-banner-1,#ad-billboard-bottom,#ad-block-125,#ad-bottom,#ad-bottom-wrapper,#ad-box-first,#ad-box-second,#ad-boxes,#ad-bs,#ad-buttons,#ad-colB-1,#ad-column,#ad-content,#ad-contentad,#ad-flex-first,#ad-footer,#ad-footprint-160x600,#ad-frame,#ad-front-footer,#ad-front-sponsoredlinks,#ad-halfpage,#ad-header-728x90,#ad-horizontal-header,#ad-img,#ad-inner,#ad-label,#ad-leaderboard,#ad-leaderboard-bottom,#ad-leaderboard-container,#ad-leaderboard-spot,#ad-leaderboard-top,#ad-left,#ad-links-content,#ad-list-row,#ad-lrec,#ad-medium,#ad-medium-rectangle,#ad-medrec,#ad-middlethree,#ad-middletwo,#ad-module,#ad-mpu,#ad-mpu1-spot,#ad-mpu2,#ad-mpu2-spot,#ad-north,#ad-one,#ad-placard,#ad-placeholder,#ad-rectangle,#ad-right,#ad-righttop,#ad-row,#ad-side-text,#ad-sidebar,#ad-sky,#ad-skyscraper,#ad-slug-wrapper,#ad-small-banner,#ad-space,#ad-special,#ad-splash,#ad-sponsors,#ad-spot,#ad-squares,#ad-target,#ad-target-Leaderbord,#ad-teaser,#ad-text,#ad-top-banner,#ad-top-text-low,#ad-top-wrap,#ad-tower,#ad-trailerboard-spot,#ad-two,#ad-typ1,#ad-unit,#ad-west,#ad-wrap,#ad-wrap-right,#ad-wrapper1,#ad-yahoo-simple,#ad1006,#ad11,#ad125BL,#ad125BR,#ad125TL,#ad125TR,#ad125x125,#ad160x600,#ad160x600right,#ad1Sp,#ad2,#ad2Sp,#ad300,#ad300-250,#ad300X250,#ad300_x_250,#ad300x100Middle,#ad300x150,#ad300x250,#ad300x250Module,#ad300x60,#ad300x600,#ad300x600_callout,#ad336,#ad336x280,#ad375x85,#ad4,#ad468,#ad468x60,#ad468x60_top,#ad526x250,#ad600,#ad7,#ad728,#ad728Mid,#ad728Top,#ad728Wrapper,#ad728top,#ad728x90_1,#ad90,#adBadges,#adBanner120x600,#adBanner160x600,#adBanner336x280,#adBanner728,#adBannerTable,#adBannerTop,#adBar,#adBelt,#adBlock125,#adBlockTop,#adBlocks,#adBox,#adBox350,#adBox390,#adCirc300X200,#adCirc_620_100,#adColumn,#adContainer_1,#adContainer_2,#adContainer_3,#adDiv300,#adDiv728,#adFiller,#adFps,#adFtofrs,#adGallery,#adGroup1,#adHeaderTop,#adIsland,#adL,#adLB,#adLabel,#adLayer,#adLeader,#adLeaderTop,#adLeaderboard,#adMPU,#adMediumRectangle,#adMiddle0Frontpage,#adMiniPremiere,#adP,#adPlaceHolderRight,#adPlacer,#adRight,#adSenseModule,#adSenseWrapper,#adServer_marginal,#adSidebar,#adSidebarSq,#adSky,#adSkyscraper,#adSlider,#adSpace,#adSpace3,#adSpace300_ifrMain,#adSpace4,#adSpace5,#adSpace6,#adSpace7,#adSpace_footer,#adSpace_right,#adSpace_top,#adSpacer,#adSpecial,#adSplotlightEm,#adSpot-Leader,#adSpot-banner,#adSpot-island,#adSpot-mrec1,#adSpot-sponsoredlinks,#adSpot-textbox1,#adSpot-widestrip,#adSpotAdvertorial,#adSpotIsland,#adSpotSponsoredLinks,#adSquare,#adStaticA,#adStrip,#adSuperAd,#adSuperPremiere,#adSuperSkyscraper,#adSuperbanner,#adTableCell,#adTag1,#adTag2,#adText,#adTextLink,#adText_container,#adTile,#adTopContent,#adTopboxright,#adTower,#adUnit,#adZoneTop,#ad_1,#ad_130x250_inhouse,#ad_160x160,#ad_160x600,#ad_190x90,#ad_2,#ad_3,#ad_300,#ad_300_250,#ad_300_250_1,#ad_300x250,#ad_300x250_content_column,#ad_300x90,#ad_4,#ad_468_60,#ad_5,#ad_728_foot,#ad_728x90,#ad_728x90_container,#ad_940,#ad_984,#ad_A,#ad_B,#ad_Banner,#ad_C,#ad_C2,#ad_D,#ad_E,#ad_F,#ad_G,#ad_H,#ad_I,#ad_J,#ad_K,#ad_L,#ad_M,#ad_N,#ad_O,#ad_P,#ad_YieldManager-300x250,#ad_anchor,#ad_banner,#ad_banner_top,#ad_bar,#ad_bellow_post,#ad_bigsize_wrapper,#ad_block_1,#ad_block_2,#ad_bottom,#ad_box,#ad_box_colspan,#ad_box_top,#ad_branding,#ad_bs_area,#ad_buttons,#ad_center_monster,#ad_cna2,#ad_cont,#ad_container_marginal,#ad_container_side,#ad_container_top,#ad_content_top,#ad_content_wrap,#ad_feature,#ad_firstpost,#ad_footer,#ad_front_three,#ad_fullbanner,#ad_global_header,#ad_haha_1,#ad_haha_4,#ad_halfpage,#ad_head,#ad_header,#ad_holder,#ad_horizontal,#ad_horseshoe_left,#ad_horseshoe_right,#ad_horseshoe_spacer,#ad_horseshoe_top,#ad_hotpots,#ad_in_arti,#ad_island,#ad_label,#ad_large_rectangular,#ad_lastpost,#ad_layer2,#ad_leaderBoard,#ad_leaderboard,#ad_leaderboard728x90,#ad_leaderboard_top,#ad_left,#ad_lrec,#ad_lwr_square,#ad_main,#ad_medium_rectangle,#ad_medium_rectangular,#ad_mediumrectangle,#ad_menu_header,#ad_message,#ad_middle,#ad_most_pop_234x60_req_wrapper,#ad_mpu,#ad_mpu300x250,#ad_mpuav,#ad_mrcontent,#ad_overlay,#ad_play_300,#ad_rect,#ad_rect_body,#ad_rect_bottom,#ad_rectangle,#ad_rectangle_medium,#ad_related_links_div,#ad_related_links_div_program,#ad_replace_div_0,#ad_replace_div_1,#ad_report_leaderboard,#ad_report_rectangle,#ad_right,#ad_right_main,#ad_ros_tower,#ad_rr_1,#ad_sec,#ad_sec_div,#ad_sgd,#ad_sidebar,#ad_sidebar1,#ad_sidebar2,#ad_sidebar3,#ad_skyscraper,#ad_skyscraper160x600,#ad_skyscraper_text,#ad_slot_leaderboard,#ad_slot_livesky,#ad_slot_sky_top,#ad_ss,#ad_term_bottom_place,#ad_text:not(textarea),#ad_thread_first_post_content,#ad_top,#ad_top_holder,#ad_tp_banner_1,#ad_tp_banner_2,#ad_unit,#ad_vertical,#ad_wide,#ad_wide_box,#ad_widget,#ad_window,#ad_wrap,#adbForum,#adbanner,#adbig,#adbnr,#adboard,#adbottom,#adbox1,#adbox2,#adclear,#adcode,#adcode1,#adcode2,#adcode3,#adcode4,#adcolumnwrapper,#adcontainer,#adcontainerRight,#adcontainsm,#adcontent,#adcontent1,#adcontrolPushSite,#add_ciao2,#addbottomleft,#addiv-bottom,#addiv-top,#adfooter,#adfooter_728x90,#adframe:not(frameset),#adhead,#adhead_g,#adheader,#adhome,#adiframe1_iframe,#adiframe2_iframe,#adiframe3_iframe,#adimg,#adition_content_ad,#adlabel,#adlabelFooter,#adlayerad,#adleaderboard,#adleaderboard_flex,#adleaderboardb,#adleaderboardb_flex,#adleft,#adlinks,#adlinkws,#adlrec,#admid,#admiddle3center,#admiddle3left,#adposition,#adposition-C,#adposition-FPMM,#adposition1,#adposition2,#adposition4,#adrectangle,#adrectanglea,#adrectanglea_flex,#adrectangleb,#adrectangleb_flex,#adrig,#adright,#adright2,#adrighthome,#ads-468,#ads-area,#ads-block,#ads-bot,#ads-bottom,#ads-col,#ads-dell,#ads-horizontal,#ads-indextext,#ads-leaderboard1,#ads-lrec,#ads-menu,#ads-middle,#ads-prices,#ads-rhs,#ads-right,#ads-sponsored-boxes,#ads-top,#ads-vers7,#ads-wrapper,#ads120,#ads160left,#ads2,#ads300,#ads300-250,#ads300Bottom,#ads300Top,#ads336x280,#ads7,#ads728bottom,#ads728top,#ads790,#adsDisplay,#adsID,#ads_160,#ads_300,#ads_728,#ads_banner,#ads_belowforumlist,#ads_belownav,#ads_bottom_inner,#ads_bottom_outer,#ads_box,#ads_button,#ads_catDiv,#ads_footer,#ads_fullsize,#ads_html1,#ads_html2,#ads_medrect,#ads_notice,#ads_right,#ads_right_sidebar,#ads_sidebar_roadblock,#ads_space,#ads_top,#ads_watch_top_square,#ads_zone27,#adsbottom,#adsbox,#adscolumn,#adsd_contentad_r1,#adsd_contentad_r2,#adsd_contentad_r3,#adsd_topbanner,#adsd_txt_sky,#adsdiv,#adsense-2,#adsense-header,#adsense-tag,#adsense-text,#adsenseLeft,#adsenseOne,#adsenseWrap,#adsense_article_left,#adsense_box,#adsense_leaderboard,#adsense_overlay,#adsense_placeholder_2,#adsenseheader,#adsensetopplay,#adsensewidget-3,#adserv,#adsimage,#adsky,#adskyscraper,#adslot,#adsonar,#adspace-300x250,#adspace300x250,#adspaceBox,#adspaceBox300,#adspace_header,#adspot,#adspot-1,#adspot-149x170,#adspot-1x4,#adspot-2,#adspot-295x60,#adspot-2a,#adspot-2b,#adspot-300x250-pos-1,#adspot-300x250-pos-2,#adspot-468x60-pos-2,#adspot-a,#adspot300x250,#adspot_220x90,#adspot_300x250,#adspot_468x60,#adspot_728x90,#adsquare,#adsright,#adst,#adstop,#adt,#adtab,#adtag_right_side,#adtaily-widget-light,#adtech_googleslot_03c,#adtech_takeover,#adtop,#adtophp,#adtxt,#adv-masthead,#adv_google_300,#adv_google_728,#adv_top_banner_wrapper,#adver1,#adver2,#adver3,#adver4,#adver5,#adver6,#adver7,#advert-1,#advert-120,#advert-boomer,#advert-display,#advert-header,#advert-leaderboard,#advert-links-bottom,#advert-skyscraper,#advert-top,#advert1,#advertBanner,#advertContainer,#advertDB,#advertRight,#advert_125x125,#advert_250x250,#advert_box,#advert_home01,#advert_leaderboard,#advert_lrec_format,#advert_mid,#advert_mpu,#advert_mpu_1,#advert_right_skyscraper,#advert_sky,#advertbox,#advertbox2,#advertbox3,#advertbox4,#adverthome,#advertise-here-sidebar,#advertise-now,#advertise1,#advertiseHere,#advertisement160x600,#advertisement728x90,#advertisementLigatus,#advertisementPrio2,#advertisementsarticle,#advertiser-container,#advertiserLinks,#advertisers,#advertising-banner,#advertising-caption,#advertising-container,#advertising-control,#advertising-skyscraper,#advertising2,#advertisingModule160x600,#advertisingModule728x90,#advertising_btm,#advertising_horiz_cont,#advertisment,#advertismentElementInUniversalbox,#advertorial,#adverts-top-container,#adverts-top-left,#adverts-top-middle,#adverts-top-right,#advertsingle,#advt,#adwhitepaperwidget,#adwin_rec,#adwith,#adwords-4-container,#adxBigAd,#adxMiddle5,#adxSponLink,#adxSponLinkA,#adxtop,#adz,#adzbanner,#adzerk,#adzerk1,#adzoneBANNER,#affinityBannerAd,#agi-ad300x250,#agi-ad300x250overlay,#agi-sponsored,#alert_ads,#anchorAd,#annoying_ad,#ap_adframe,#apiBackgroundAd,#apiTopAdWrap,#apmNADiv,#araHealthSponsorAd,#area-adcenter,#area1ads,#article-ad-container,#article-box-ad,#articleAdReplacement,#articleLeftAdColumn,#articleSideAd,#article_ad,#article_ad_container,#article_box_ad,#asinglead,#atlasAdDivGame,#awds-nt1-ad,#banner-300x250,#banner-ad,#banner-ad-container,#banner-ads,#banner250x250,#banner468x60,#banner728x90,#bannerAd,#bannerAdTop,#bannerAd_ctr,#banner_ad,#banner_ad_footer,#banner_ad_module,#banner_admicro,#banner_ads,#banner_content_ad,#banner_topad,#bannerad2,#baseAdvertising,#bbccom_mpu,#bbccom_storyprintsponsorship,#bbo_ad1,#bg-footer-ads,#bg-footer-ads2,#bg_YieldManager-160x600,#bg_YieldManager-300x250,#bg_YieldManager-728x90,#bigAd,#bigBoxAd,#bigad300outer,#bigadbox,#bigadframe,#bigadspot,#billboard_ad,#block-ad_cube-1,#block-openads-0,#block-openads-1,#block-openads-2,#block-openads-3,#block-openads-4,#block-openads-5,#block-thewrap_ads_250x300-0,#blog-ad,#blog_ad_content,#blog_ad_opa,#blox-big-ad,#blox-big-ad-bottom,#blox-big-ad-top,#blox-halfpage-ad,#blox-tile-ad,#blox-tower-ad,#body_728_ad,#book-ad,#botad,#bott_ad2,#bott_ad2_300,#bottom-ad,#bottom-ad-container,#bottom-ad-wrapper,#bottom-ads,#bottomAd,#bottomAdCCBucket,#bottomAdContainer,#bottomAdSense,#bottomAdSenseDiv,#bottomAds,#bottomRightAd,#bottomRightAdSpace,#bottom_ad,#bottom_ad_area,#bottom_ad_unit,#bottom_ads,#bottom_banner_ad,#bottom_overture,#bottom_sponsor_ads,#bottom_sponsored_links,#bottom_text_ad,#bottomad,#bottomads,#bottomadsense,#bottomadwrapper,#bottomleaderboardad,#box-content-ad,#box-googleadsense-1,#box-googleadsense-r,#box1ad,#boxAd300,#boxAdContainer,#box_ad,#box_advertisment,#box_mod_googleadsense,#boxad1,#boxad2,#boxad3,#boxad4,#boxad5,#bpAd,#bps-header-ad-container,#btr_horiz_ad,#burn_header_ad,#button-ads-horizontal,#button-ads-vertical,#buttonAdWrapper1,#buttonAdWrapper2,#buttonAds,#buttonAdsContainer,#button_ad_container { visibility:hidden !important; display:none !important; } #button_ad_wrap,#buttonad,#buy-sell-ads,#c4ad-Middle1,#c_ad_sb,#c_ad_sky,#caAdLarger,#catad,#category-ad,#cellAd,#channel_ad,#channel_ads,#ciHomeRHSAdslot,#circ_ad,#cnnRR336ad,#cnnTopAd,#cnnVPAd,#col3_advertising,#colAd,#colRightAd,#collapseobj_adsection,#column4-google-ads,#comments-ad-container,#commercial_ads,#common_right_ad_wrapper,#common_right_lower_ad_wrapper,#common_right_lower_adspace,#common_right_lower_player_ad_wrapper,#common_right_lower_player_adspace,#common_right_player_ad_wrapper,#common_right_player_adspace,#common_right_right_adspace,#common_top_adspace,#companion-ad,#companionAdDiv,#companionad,#containerLocalAds,#containerLocalAdsInner,#containerMrecAd,#containerSqAd,#content-ad-header,#content-header-ad,#content-left-ad,#content-right-ad,#contentBoxad,#contentTopAds2,#content_ad_square,#content_ad_top,#content_ads_content,#content_box_300body_sponsoredoffers,#content_box_adright300_google,#content_mpu,#contentad,#contentad_imtext,#contentad_right,#contentads,#contentinlineAd,#contextad,#contextual-ads,#contextual-ads-block,#contextualad,#coverads,#ctl00_Adspace_Top_Height,#ctl00_BottomAd,#ctl00_ContentMain_BanManAd468_BanManAd,#ctl00_ContentPlaceHolder1_blockAdd_divAdvert,#ctl00_ContentRightColumn_RightColumn_Ad1_BanManAd,#ctl00_ContentRightColumn_RightColumn_Ad2_BanManAd,#ctl00_ContentRightColumn_RightColumn_PremiumAd1_ucBanMan_BanManAd,#ctl00_LHTowerAd,#ctl00_LeftHandAd,#ctl00_MasterHolder_IBanner_adHolder,#ctl00_TopAd,#ctl00_TowerAd,#ctl00_VBanner_adHolder,#ctl00__Content__RepeaterReplies_ctl03__AdReply,#ctl00_abot_bb,#ctl00_adFooter,#ctl00_advert_LargeMPU_div_AdPlaceHolder,#ctl00_atop_bt,#ctl00_cphMain_hlAd1,#ctl00_cphMain_hlAd2,#ctl00_cphMain_hlAd3,#ctl00_ctl00_MainPlaceHolder_itvAdSkyscraper,#ctl00_ctl00_ctl00_Main_Main_PlaceHolderGoogleTopBanner_MPTopBannerAd,#ctl00_ctl00_ctl00_Main_Main_SideBar_MPSideAd,#ctl00_dlTilesAds,#ctl00_m_skinTracker_m_adLBL,#ctl00_phCrackerMain_ucAffiliateAdvertDisplayMiddle_pnlAffiliateAdvert,#ctl00_phCrackerMain_ucAffiliateAdvertDisplayRight_pnlAffiliateAdvert,#ctrlsponsored,#cubeAd,#cube_ads,#cube_ads_inner,#cubead,#cubead-2,#dItemBox_ads,#dart_160x600,#dc-display-right-ad-1,#dcol-sponsored,#defer-adright,#detail_page_vid_topads,#div-gpt-ad-1,#div-gpt-ad-2,#div-gpt-ad-3,#div-gpt-ad-4,#divAdBox,#divAdWrapper,#divDoubleAd,#divLeftAd12,#divLeftRecAd,#divMenuAds,#divWNAdHeader,#divWrapper_Ad,#div_ad_leaderboard,#div_video_ads,#dlads,#dni-header-ad,#dnn_adLeaderBoard2008,#dnn_ad_banner,#download_ads,#dp_ads1,#ds-mpu,#editorsmpu,#embedded-ad,#evotopTen_advert,#ex-ligatus,#exads,#featured-advertisements,#featuredAdContainer2,#featuredAds,#feed_links_ad_container,#first-300-ad,#first-adlayer,#first_ad_unit,#firstad,#fl_hdrAd,#flash_ads_1,#flexiad,#footad,#footer-ad,#footer-advert,#footer-adverts,#footer-sponsored,#footerAd,#footerAdDiv,#footerAds,#footerAdvertisement,#footerAdverts,#footer_ad_01,#footer_ad_block,#footer_ad_container,#footer_ad_modules,#footer_adspace,#footer_text_ad,#footerad,#footerads,#footeradsbox,#forum_top_ad,#fpv_companionad,#fr_ad_center,#frame_admain,#frnAdSky,#frnBannerAd,#frnContentAd,#from_our_sponsors,#front_advert,#front_mpu,#ft-ad,#ft-ad-1,#ft-ad-container,#ft_mpu,#fusionad,#fw-advertisement,#g_ad,#g_adsense,#ga_300x250,#gad,#gad2,#gad3,#gad5,#galleries-tower-ad,#gallery-ad-m0,#gallery_ads,#game-info-ad,#gasense,#gglads,#global_header_ad_area,#gmi-ResourcePageAd,#gmi-ResourcePageLowerAd,#goads,#gooadtop,#google-ad,#google-ad-art,#google-ad-table-right,#google-ad-tower,#google-ads,#google-ads-bottom,#google-ads-header,#google-ads-left-side,#google-adsense-mpusize,#googleAd,#googleAds,#googleAdsSml,#googleAdsense,#googleAdsenseBanner,#googleAdsenseBannerBlog,#googleAdwordsModule,#googleAfcContainer,#googleSearchAds,#googleShoppingAdsRight,#googleShoppingAdsTop,#googleSubAds,#google_ad,#google_ad_container,#google_ad_inline,#google_ad_test,#google_ads,#google_ads_aCol,#google_ads_frame1,#google_ads_frame1_anchor,#google_ads_frame2,#google_ads_frame2_anchor,#google_ads_frame3,#google_ads_frame3_anchor,#google_ads_test,#google_ads_top,#google_adsense_home_468x60_1,#googlead2,#googleadbox,#googleads,#googleadsense,#googlesponsor,#gpt-ad-halfpage,#gpt-ad-rectangle1,#gpt-ad-rectangle2,#gpt-ad-skyscraper,#gpt-ad-story_rectangle3,#grid_ad,#gsyadrectangleload,#gsyadrightload,#gsyadtop,#gsyadtopload,#gtopadvts,#half-page-ad,#halfPageAd,#halfe-page-ad-box,#hd-ads,#hd-banner-ad,#hdtv_ad_ss,#headAd,#head_advert,#headad,#header-ad,#header-ad-rectangle-container,#header-ads,#header-adspace,#header-advert,#header-advertisement,#header-advertising,#header-adverts,#headerAd,#headerAdBackground,#headerAdContainer,#headerAdWrap,#headerAds,#headerAdsWrapper,#headerTopAd,#header_ad_728_90,#header_ad_container,#header_adcode,#header_ads,#header_advertisement_top,#header_leaderboard_ad_container,#header_publicidad,#headerad,#headeradbox,#headerads,#headeradsbox,#headeradwrap,#headline_ad,#headlinesAdBlock,#hiddenadAC,#hideads,#hl-sponsored-results,#hly_ad_side_bar_tower_left,#home-advert-module,#home-rectangle-ad,#home-sponsors-module,#homeMPU,#homeTopRightAd,#home_ad,#home_bottom_ad,#home_contentad,#home_feature_ad,#home_mpu,#home_spensoredlinks,#homepage-ad,#homepageAdsTop,#homepageFooterAd,#homepage_right_ad,#homepage_right_ad_container,#homepage_top_ads,#hometop_234x60ad,#hor_ad,#horizontal-banner-ad,#horizontal_ad,#horizontal_ad_top,#horizontalads,#houseAd,#hp-header-ad,#hp-right-ad,#hp-store-ad,#hpV2_300x250Ad,#hpV2_googAds,#hp_ad300x250,#icePage_SearchLinks_AdRightDiv,#icePage_SearchLinks_DownloadToolbarAdRightDiv,#icePage_SearchResults_ads0_SponsoredLink,#icePage_SearchResults_ads1_SponsoredLink,#icePage_SearchResults_ads2_SponsoredLink,#icePage_SearchResults_ads3_SponsoredLink,#icePage_SearchResults_ads4_SponsoredLink,#imu_ad_module,#in_serp_ad,#inadspace,#indexad,#inline-story-ad,#inlineAd,#inlinead,#inlinegoogleads,#inlist-ad-block,#inner-advert-row,#innerpage-ad,#inside-page-ad,#insider_ad_wrapper,#instoryad,#instoryadtext,#instoryadwrap,#int-ad,#interstitial_ad_wrapper,#islandAd,#j_ad,#ji_medShowAdBox,#jmp-ad-buttons,#joead,#joead2,#ka_adRightSkyscraperWide,#kdz_ad1,#kdz_ad2,#landing-adserver,#lapho-top-ad-1,#largead,#lateAd,#layerAds_layerDiv,#layerTLDADSERV,#lb-sponsor-left,#lb-sponsor-right,#leader-board-ad,#leader-sponsor,#leaderAd,#leaderAdContainer,#leader_board_ad,#leaderad,#leaderad_section,#leaderboard-ad,#leaderboard-bottom-ad,#leaderboard_ad,#left-ad-skin,#left-lower-adverts,#left-lower-adverts-container,#leftAdContainer,#leftAd_rdr,#leftAdvert,#leftSectionAd300-100,#left_ad,#left_adspace,#leftad,#leftads,#leftcolAd,#lg-banner-ad,#ligatus,#linkAds,#linkads,#live-ad,#logoAd,#longAdSpace,#lowerAdvertisementImg,#lowerads,#lowerthirdad,#lowertop-adverts,#lowertop-adverts-container,#lpAdPanel,#lrecad,#lsadvert-left_menu_1,#lsadvert-left_menu_2,#lsadvert-top,#mBannerAd,#main-ad,#main-ad160x600,#main-ad160x600-img,#main-ad728x90,#main-bottom-ad,#mainAdUnit,#mainAdvert,#main_ad,#main_rec_ad,#main_top_ad_container,#marketing-promo,#mastAd,#mastAdvert,#mastad,#mastercardAd,#masthead_ad,#masthead_topad,#medRecAd,#media_ad,#mediaplayer_adburner,#mediumAdvertisement,#medrectad,#menuAds,#mi_story_assets_ad,#mid-ad300x250,#mid-table-ad,#midRightTextAds,#mid_ad_div,#mid_ad_title,#mid_mpu,#midadd,#midadspace,#middle-ad,#middlead,#midrect_ad,#midstrip_ad,#mini-ad,#mochila-column-right-ad-300x250,#mochila-column-right-ad-300x250-1,#module-google_ads,#module_ad,#module_box_ad,#module_sky_scraper,#monsterAd,#moogleAd,#most_popular_ad,#motionAd,#mpu,#mpu-advert,#mpu300250,#mpuAd,#mpuDiv,#mpuSlot,#mpuWrapper,#mpuWrapperAd,#mpu_banner,#mpu_holder,#mpu_text_ad,#mpuad,#mr_banner_topad,#mrecAdContainer,#msAds,#ms_ad,#msad,#multiLinkAdContainer,#multi_ad,#myads_HeaderButton,#n_sponsor_ads,#namecom_ad_hosting_main,#narrow_ad_unit,#natadad300x250,#national_microlink_ads,#nationalad,#navi_banner_ad_780,#nba160PromoAd,#nba300Ad,#nbaHouseAnd600Ad,#nbaLeft600Ad,#nbaMidAds,#nbaVid300Ad,#new_topad,#newads,#ng_rtcol_ad,#noresults_ad_container,#noresultsads,#northad,#ns_ad1,#ns_ad2,#ns_ad3,#oanda_ads,#onespot-ads,#online_ad,#p-googleadsense,#page-header-ad,#page-top-ad,#pageAds,#pageAdsDiv,#pageBannerAd,#page_content_top_ad,#pagelet_adbox,#pagelet_netego_ads,#pagelet_search_ads2,#panelAd,#pb_report_ad,#pcworldAdBottom,#pcworldAdTop,#pinball_ad,#player-below-advert,#player_ad,#player_ads,#pod-ad-video-page,#populate_ad_bottom,#populate_ad_left,#portlet-advertisement-left,#portlet-advertisement-right,#post-promo-ad,#post5_adbox,#post_ad,#premium_ad,#priceGrabberAd,#prime-ad-space,#print_ads,#product-adsense,#promoAds,#ps-vertical-ads,#pub468x60,#publicidad,#pushdown_ad,#qm-ad-big-box,#qm-ad-sky,#qm-dvdad,#r1SoftAd,#rail_ad1,#rail_ad2,#realEstateAds,#rectAd,#rect_ad,#rectangle-ad,#rectangle_ad,#refine-300-ad,#region-node-advert,#region-top-ad,#rh-ad-container,#rh_tower_ad,#rhapsodyAd,#rhs_ads,#rhsadvert,#right-ad,#right-ad-skin,#right-ad-title,#right-ad1,#right-ads-3,#right-box-ad,#right-featured-ad,#right-mpu-1-ad-container,#right-uppder-adverts,#right-uppder-adverts-container,#rightAd,#rightAd300x250,#rightAdBar,#rightAdColumn,#rightAd_rdr,#rightAdsDiv,#rightColAd,#rightColumnMpuAd,#rightColumnSkyAd,#rightTopSponsor,#right_ad_wrapper,#right_ads,#right_advertisement,#right_advertising,#right_column_ad_container,#right_column_ads,#right_column_internal_ad_container,#right_column_top_ad_unit,#rightad,#rightadContainer,#rightadvertbar-doubleclickads,#rightbar-ad,#rightcolumn_300x250ad,#rightside-ads,#rightside_ad,#righttop-adverts,#righttop-adverts-container,#rm_ad_text,#ros_ad,#rotatingads,#row2AdContainer,#rr_MSads,#rt-ad,#rt-ad-top,#rt-ad468,#rtMod_ad,#rtmod_ad,#sAdsBox,#sb-ad-sq,#sb_ad_links,#sb_advert,#sb_sponsors,#search-google-ads,#search-sponsored-links,#search-sponsored-links-top,#searchAdSenseBox,#searchAdSenseBoxAd,#searchAdSkyscraperBox,#search_ads,#search_result_ad,#sec_adspace,#second-adlayer,#secondBoxAdContainer,#secondrowads,#section-ad-1-728,#section-ad-300-250,#section-ad-4-160,#section-blog-ad,#section-container-ddc_ads,#section-sponsors,#section_advertorial_feature,#servfail-ads,#sew-ad1,#shoppingads,#show-ad,#showAd,#showad,#side-ad,#side-ad-container,#sideAd,#sideAdSub,#sideBarAd,#side_ad,#side_ad_wrapper,#side_ads_by_google,#side_sky_ad,#sidead,#sideads,#sideadtop-to,#sidebar-125x125-ads,#sidebar-125x125-ads-below-index,#sidebar-ad,#sidebar-ad-boxes,#sidebar-ad-space,#sidebar-ad-wrap,#sidebar-ad3,#sidebar2ads,#sidebar_ad,#sidebar_ad_widget,#sidebar_ads_180,#sidebar_sponsoredresult_body,#sidebar_txt_ad_links,#sidebarad,#sidebaradver_advertistxt,#sideline-ad,#single-mpu,#singlead,#site-leaderboard-ads,#site_top_ad,#sitead,#sky-ad,#skyAd,#skyAdContainer,#skyScrapperAd,#skyWrapperAds,#sky_ad,#sky_advert,#skyads,#skyadwrap,#skyline_ad,#skyscraper-ad,#skyscraperAd,#skyscraperAdContainer,#skyscraper_ad,#skyscraper_advert,#skyscraperad,#slide_ad,#sliderAdHolder,#slideshow_ad_300x250,#sm-banner-ad,#small_ad,#small_ads,#smallerAd,#some-ads,#some-more-ads,#specialAd_one,#specialAd_two,#specialadvertisingreport_container,#specials_ads,#speeds_ads,#speeds_ads_fstitem,#speedtest_mrec_ad,#sphereAd,#sponLinkDiv_1,#sponlink,#sponlinks,#sponsAds,#sponsLinks,#spons_left,#sponseredlinks,#sponsor-search,#sponsorAd1,#sponsorAd2,#sponsorAdDiv,#sponsorLinks,#sponsorTextLink,#sponsor_banderole,#sponsor_box,#sponsor_deals,#sponsor_panSponsor,#sponsor_recommendations,#sponsorbar,#sponsorbox,#sponsored-ads,#sponsored-features,#sponsored-links,#sponsored-resources,#sponsored1,#sponsoredBox1,#sponsoredBox2,#sponsoredLinks,#sponsoredList,#sponsoredResults,#sponsoredResultsWide,#sponsoredSiteMainline,#sponsoredSiteSidebar,#sponsored_ads_v4,#sponsored_content,#sponsored_game_row_listing,#sponsored_links,#sponsored_v12,#sponsoredads,#sponsoredlinks,#sponsoredlinks_cntr,#sponsoredlinkslabel,#sponsoredresults_top,#sponsoredwellcontainerbottom,#sponsoredwellcontainertop,#sponsorfull,#sponsoring_bar,#sponsorlink,#sponsors,#sponsors_top_container,#sponsorshipBadge,#spotlightAds,#spotlightad,#sqAd,#square-sponsors,#squareAd,#squareAdSpace,#squareAds,#square_ad,#start_middle_container_advertisment,#sticky-ad,#stickyBottomAd,#story-90-728-area,#story-ad-a,#story-ad-b,#story-leaderboard-ad,#story-sponsoredlinks,#storyAd,#storyAdWrap,#storyad2,#subpage-ad-right,#subpage-ad-top,#swads,#synch-ad,#systemad_background,#tabAdvertising,#takeoverad,#tblAd,#tbl_googlead,#tcwAd,#td-GblHdrAds,#template_ad_leaderboard,#tertiary_advertising,#text-ad,#text-ads,#text-link-ads,#textAd,#textAds,#text_ad,#text_ads,#text_advert,#textad,#textad3,#the-last-ad-standing,#thefooterad,#themis-ads,#tile-ad,#tmglBannerAd,#tmp2_promo_ad,#toolbarSlideUpAd,#top-ad,#top-ad-container,#top-ad-menu,#top-ads,#top-ads-tabs,#top-advertisement,#top-banner-ad,#top-search-ad-wrapper,#topAd728x90,#topAdBanner,#topAdBox,#topAdContainer,#topAdSenseDiv,#topAdcontainer,#topAds,#topAdsContainer,#topAdvert,#topBannerAdContainer,#topContentAdTeaser,#topNavLeaderboardAdHolder,#topRightBlockAdSense,#top_ad_area,#top_ad_banner,#top_ad_game,#top_ad_unit,#top_ad_wrapper,#top_ad_zone,#top_ads,#top_advertise,#top_advertising,#top_rectangle_ad,#top_right_ad,#top_wide_ad,#topad1,#topad2,#topad_left,#topad_right,#topadbar,#topadblock,#topaddwide,#topadsense,#topadspace,#topadzone,#topbanner_ad,#topbar-ad,#topcustomad,#topleaderboardad,#topnav-ad-shell,#toprightAdvert,#toprightad,#topsponsored,#toptextad,#tour300Ad,#tourSponsoredLinksContainer,#towerad,#ts-ad_module,#ttp_ad_slot1,#ttp_ad_slot2,#twogamesAd,#txt_link_ads,#undergameAd,#upperAdvertisementImg,#upperMpu,#upperad,#urban_contentad_1,#urban_contentad_2,#urban_contentad_article,#v_ad,#vert_ad,#vert_ad_placeholder,#vertical_ad,#vertical_ads,#videoAd,#video_cnv_ad,#video_overlay_ad,#videoadlogo,#viewportAds,#viewvid_ad300x250,#walltopad,#weblink_ads_container,#welcomeAdsContainer,#welcome_ad_mrec,#welcome_advertisement,#wf_ContentAd,#wf_FrontSingleAd,#wf_SingleAd,#wf_bottomContentAd,#wgtAd,#whatsnews_top_ad,#whitepaper-ad,#whoisRightAdContainer,#wide_ad_unit_top,#widget_advertisement,#wrapAdRight,#wrapAdTop,#wrapperAdsTopLeft,#wrapperAdsTopRight,#xColAds,#y-ad-units,#y708-ad-expedia,#y708-ad-lrec,#y708-ad-partners,#y708-ad-ysm,#y708-advertorial-marketplace,#yahoo-ads,#yahoo-sponsors,#yahooSponsored,#yahoo_ads,#yahoo_ads_2010,#yahoo_text_ad,#yahooad-tbl,#yan-sponsored,#yatadsky,#ybf-ads,#yfi_fp_ad_mort,#yfi_fp_ad_nns,#yfi_pf_ad_mort,#ygrp-sponsored-links,#ymap_adbanner,#yn-gmy-ad-lrec,#yreSponsoredLinks,#ysm_ad_iframe,#zoneAdserverMrec,#zoneAdserverSuper,.ADBAR,.ADPod,.AD_ALBUM_ITEMLIST,.AD_MOVIE_ITEM,.AD_MOVIE_ITEMLIST,.AD_MOVIE_ITEMROW,.Ad-Header,.Ad-MPU,.Ad1,.Ad120x600,.Ad160x600,.Ad160x600left,.Ad160x600right,.Ad2,.Ad247x90,.Ad300x,.Ad300x250,.Ad300x250L,.Ad728x90,.AdBorder,.AdBox7,.AdContainerBox308,.AdHeader,.AdHere,.AdMedium,.AdPlaceHolder,.AdProduct,.AdRingtone,.AdSenseLeft,.AdSlot,.AdSpace,.AdTextSmallFont,.AdUnit,.AdUnit300,.Ad_C,.Ad_D_Wrapper,.Ad_E_Wrapper,.Ad_Right,.AdsBoxBottom,.AdsBoxSection,.AdsBoxTop,.AdsLinks1,.AdsLinks2,.AdsRec,.AdvertMidPage,.AdvertiseWithUs,.AdvertisementTextTag,.ArticleAd,.ArticleInlineAd,.BannerAd,.BigBoxAd,.BlockAd,.BlueTxtAdvert,.BottomAdContainer,.BottomAffiliate,.BoxAd,.CG_adkit_leaderboard,.CG_details_ad_dropzone,.CWReviewsProdInfoAd,.ComAread,.CommentAd,.ContentAd,.ContentAds,.DAWRadvertisement,.DeptAd,.DisplayAd,.FT_Ad,.FlatAds,.GOOGLE_AD,.GoogleAd,.GoogleAdSenseBottomModule,.GoogleAdSenseRightModule,.HPG_Ad_B,.HPNewAdsBannerDiv,.HPRoundedAd,.HomeContentAd,.IABAdSpace,.InArticleAd,.IndexRightAd,.LazyLoadAd,.LeftAd,.LeftButtonAdSlot,.LeftTowerAd,.M2Advertisement,.MD_adZone,.MOS-ad-hack,.MPU,.MPUHolder { visibility:hidden !important; display:none !important; } .MPUTitleWrapperClass,.MREC_ads,.MiddleAd,.MiddleAdContainer,.NewsAds,.OAS,.OpaqueAdBanner,.OpenXad,.PU_DoubleClickAdsContent,.Post5ad,.Post9ad,.RBboxAd,.RW_ad300,.RectangleAd,.RelatedAds,.Right300x250AD,.RightAd1,.RightAdvertiseArea,.RightGoogleAFC,.RightRailTop300x250Ad,.RightSponsoredAdTitle,.RightTowerAd,.STR_AdBlock,.SideAdCol,.SidebarAd,.SidebarAdvert,.SitesGoogleAdsModule,.SkyAdContainer,.SponsorCFrame,.SponsoredAdTitle,.SponsoredContent,.SponsoredLinkItemTD,.SponsoredLinks,.SponsoredLinksGrayBox,.SponsoredLinksModule,.SponsoredLinksPadding,.SponsorshipText,.SquareAd,.StandardAdLeft,.StandardAdRight,.TRU-onsite-ads-leaderboard,.TextAd,.TheEagleGoogleAdSense300x250,.TopAd,.TopAdContainer,.TopAdL,.TopAdR,.TopBannerAd,.UIWashFrame_SidebarAds,.UnderAd,.VerticalAd,.Video-Ad,.VideoAd,.WidgetAdvertiser,.a160x600,.a728x90,.ad-120x600,.ad-160,.ad-160x600,.ad-250,.ad-300,.ad-300-block,.ad-300-blog,.ad-300x100,.ad-300x250,.ad-300x250-right0,.ad-350,.ad-355x75,.ad-600,.ad-635x40,.ad-728,.ad-728x90,.ad-728x90-1,.ad-728x90_forum,.ad-90x600,.ad-above-header,.ad-adlink-bottom,.ad-adlink-side,.ad-area,.ad-background,.ad-banner,.ad-bigsize,.ad-block,.ad-blog2biz,.ad-body,.ad-bottom,.ad-break,.ad-btn,.ad-btn-heading,.ad-cell,.ad-container-300x250,.ad-container-728x90,.ad-context,.ad-disclaimer,.ad-div,.ad-enabled,.ad-feedback,.ad-filler,.ad-flex,.ad-footer,.ad-footer-leaderboard,.ad-google,.ad-graphic-large,.ad-gray,.ad-hdr,.ad-head,.ad-header,.ad-heading,.ad-homeleaderboard,.ad-img,.ad-in-post,.ad-index-main,.ad-inline,.ad-island,.ad-label,.ad-leaderboard,.ad-links,.ad-lrec,.ad-medium,.ad-medium-two,.ad-mpu,.ad-msn,.ad-note,.ad-notice,.ad-other,.ad-permalink,.ad-placeholder,.ad-postText,.ad-poster,.ad-priority,.ad-rect,.ad-rectangle,.ad-rectangle-text,.ad-related,.ad-rh,.ad-ri,.ad-right,.ad-right-header,.ad-right-txt,.ad-row,.ad-section,.ad-show-label,.ad-side,.ad-sidebar-outer,.ad-sidebar300,.ad-sky,.ad-slot,.ad-slot-234-60,.ad-slot-300-250,.ad-slot-728-90,.ad-space,.ad-space-mpu-box,.ad-space-topbanner,.ad-spot,.ad-square,.ad-square300,.ad-squares,.ad-statement,.ad-story-inject,.ad-tabs,.ad-text-links,.ad-tile,.ad-title,.ad-top,.ad-top-left,.ad-unit,.ad-unit-300,.ad-unit-300-wrapper,.ad-unit-anchor,.ad-vert,.ad-vtu,.ad-wrap,.ad-wrapper,.ad-zone-s-q-l,.ad.super,.ad0,.ad08,.ad08sky,.ad10,.ad120,.ad120x240backgroundGray,.ad120x600,.ad125,.ad140,.ad160,.ad160x600,.ad160x600GrayBorder,.ad18,.ad19,.ad21,.ad230,.ad250,.ad250c,.ad3,.ad300,.ad300250,.ad300_250,.ad300x100,.ad300x250,.ad300x250-hp-features,.ad300x250Top,.ad300x250_container,.ad300x250box,.ad300x50-right,.ad300x600,.ad310,.ad336x280,.ad343x290,.ad4,.ad400right,.ad450,.ad468_60,.ad468x60,.ad6,.ad620x70,.ad626X35,.ad7,.ad728,.ad728_90,.ad728x90,.ad728x90_container,.ad8,.ad90x780,.adAgate,.adArea674x60,.adBanner,.adBanner300x250,.adBanner728x90,.adBannerTyp1,.adBannerTypSortableList,.adBannerTypW300,.adBar,.adBgBottom,.adBgMId,.adBgTop,.adBlock,.adBottomboxright,.adBoxBody,.adBoxBorder,.adBoxContainer,.adBoxContent,.adBoxInBignews,.adBoxSidebar,.adBoxSingle,.adBwrap,.adCMRight,.adCell,.adColumn,.adCont,.adContTop,.adContour,.adCreative,.adCube,.adFender3,.adFrame,.adFtr,.adFullWidthMiddle,.adGoogle,.adHeader,.adHeadline,.adHome300x250,.adHorisontal,.adInNews,.adLabel,.adLeader,.adLeaderForum,.adLeaderboard,.adLeft,.adLoaded,.adLocal,.adMPU,.adMarker,.adMastheadLeft,.adMastheadRight,.adMegaBoard,.adMkt2Colw,.adModuleAd,.adMpu,.adNewsChannel,.adNoOutline,.adNotice,.adNoticeOut,.adObj,.adPageBorderL,.adPageBorderR,.adPanel,.adRect,.adRight,.adSKY,.adSelfServiceAdvertiseLink,.adServer,.adSky,.adSky600,.adSkyscraperHolder,.adSlot,.adSpBelow,.adSpacer,.adSplash,.adSponsor,.adSpot,.adSpot-searchAd,.adSpot-textBox,.adSpot-twin,.adSpotIsland,.adSquare,.adSubColPod,.adSuperboard,.adSupertower,.adTD,.adTab,.adTag,.adTileWrap,.adTiler,.adTopboxright,.adTout,.adTxt,.adUnit,.adUnitHorz,.adUnitVert,.adUnitVert_noImage,.adWebBoard,.adWidget,.adWithTab,.adWrap,.adWrapper,.ad_0,.ad_1,.ad_120x90,.ad_125,.ad_130x90,.ad_160,.ad_160x600,.ad_2,.ad_200,.ad_200x200,.ad_250x250,.ad_250x250_w,.ad_3,.ad_300,.ad_300_250,.ad_300x250,.ad_300x250_box_right,.ad_336,.ad_336x280,.ad_350x100,.ad_350x250,.ad_400x200,.ad_468,.ad_468x60,.ad_600,.ad_728,.ad_728x90,.ad_Left,.ad_amazon,.ad_banner,.ad_banner_border,.ad_bar,.ad_bg,.ad_bigbox,.ad_biz,.ad_block,.ad_block_338,.ad_body,.ad_border,.ad_botbanner,.ad_bottom,.ad_bottom_leaderboard,.ad_bottom_left,.ad_box,.ad_box2,.ad_box_ad,.ad_box_div,.ad_callout,.ad_caption,.ad_column,.ad_column_box,.ad_column_hl,.ad_contain,.ad_container,.ad_content,.ad_content_wide,.ad_contents,.ad_descriptor,.ad_disclaimer,.ad_eyebrow,.ad_footer,.ad_frame,.ad_framed,.ad_front_promo,.ad_head,.ad_heading,.ad_headline,.ad_hpm,.ad_info_block,.ad_inline,.ad_island,.ad_label,.ad_launchpad,.ad_leader,.ad_leaderboard,.ad_left,.ad_line,.ad_link,.ad_linkunit,.ad_loc,.ad_lrec,.ad_main,.ad_medrec,.ad_medrect,.ad_middle,.ad_mod,.ad_mpu,.ad_mr,.ad_mrec,.ad_mrec_title_article,.ad_mrect,.ad_news,.ad_note,.ad_notice,.ad_one,.ad_p360,.ad_partner,.ad_partners,.ad_plus,.ad_post,.ad_power,.ad_promo,.ad_rectangle,.ad_right_col,.ad_row,.ad_sidebar,.ad_skyscraper,.ad_slug,.ad_slug_table,.ad_space_300_250,.ad_sponsor,.ad_sponsoredsection,.ad_spot_b,.ad_spot_c,.ad_square_r,.ad_square_top,.ad_tag_middle,.ad_text_w,.ad_title,.ad_top,.ad_top_leaderboard,.ad_top_left,.ad_topright,.ad_tower,.ad_unit,.ad_unit_rail,.ad_url,.ad_warning,.ad_wid300,.ad_wide,.ad_wrap,.ad_wrapper,.ad_wrapper_fixed,.ad_wrapper_top,.ad_zone,.adarea,.adarea-long,.adbanner,.adbannerbox,.adbannerright,.adbar,.adboard,.adborder,.adbot,.adbottom,.adbottomright,.adbox-outer,.adbox-wrapper,.adbox_300x600,.adbox_366x280,.adbox_468X60,.adbox_bottom,.adboxclass,.adbreak,.adbug,.adbuttons,.adcode,.adcolumn,.adcolumn_wrapper,.adcopy,.add_300x250,.adfieldbg,.adfoot,.adfootbox,.adhead,.adhead_h,.adhead_h_wide,.adheader,.adheader100,.adhere,.adhered,.adhi,.adhint,.adhoriz,.adi,.adiframe,.adinside,.adintro,.adjlink,.adkicker,.adkit,.adkit-advert,.adkit-lb-footer,.adlabel-horz,.adlabel-vert,.adleader,.adleaderboard,.adleft1,.adline,.adlinks,.adlnklst,.admarker,.admedrec,.admessage,.admodule,.admpu,.admpu-small,.adnation-banner,.adnotice,.adops,.adp-AdPrefix,.adpadding,.adpane,.adprice,.adproxy,.adrec,.adroot,.adrotate_widget,.adrow,.adrow-post,.adrule,.ads-125,.ads-728x90-wrap,.ads-banner,.ads-below-content,.ads-categories-bsa,.ads-favicon,.ads-links-general,.ads-mpu,.ads-outer,.ads-profile,.ads-right,.ads-sidebar,.ads-sky,.ads-stripe,.ads-text,.ads-top,.ads-widget,.ads-widget-partner-gallery,.ads160,.ads1_250,.ads2,.ads3,.ads300,.ads460,.ads460_home,.ads468,.ads728,.ads728x90,.adsArea,.adsBelowHeadingNormal,.adsBox,.adsCell,.adsCont,.adsDiv,.adsFull,.adsImages,.adsMPU,.adsRight,.adsTextHouse,.adsTop,.adsTower2,.adsTowerWrap,.adsWithUs,.ads_125_square,.ads_180,.ads_300,.ads_300x250,.ads_320,.ads_337x280,.ads_728x90,.ads_big,.ads_big-half,.ads_box,.ads_brace,.ads_catDiv,.ads_container,.ads_disc_anchor,.ads_disc_leader,.ads_disc_lwr_square,.ads_disc_skyscraper,.ads_disc_square,.ads_div,.ads_footer,.ads_header,.ads_leaderboard,.ads_medrect,.ads_mpu,.ads_outer,.ads_rectangle,.ads_right,.ads_sc_bl_i,.ads_sc_tb,.ads_sc_tl_i,.ads_show_if,.ads_side,.ads_sidebar,.ads_singlepost,.ads_spacer,.ads_takeover,.ads_title,.ads_top,.ads_top_promo,.ads_tr,.ads_verticalSpace,.ads_vtlLink,.ads_widesky,.ads_wrapperads_top,.adsbg300,.adsblockvert,.adsborder,.adsbottom,.adsbox,.adsboxitem,.adsbyyahoo,.adsc,.adscaleAdvert,.adsclick,.adscontainer,.adscreen,.adsd_shift100,.adsection_a2,.adsection_c2,.adsense-ad,.adsense-category,.adsense-category-bottom,.adsense-googleAds,.adsense-heading,.adsense-overlay,.adsense-post,.adsense-right,.adsense-title,.adsense3,.adsense300,.adsenseAds,.adsenseBlock,.adsenseContainer,.adsenseGreenBox,.adsenseList,.adsense_bdc_v2,.adsense_mpu,.adsensebig,.adsenseblock,.adsenseblock_bottom,.adsenseblock_top,.adsenselr,.adsensem_widget,.adsensesq,.adsenvelope,.adset,.adsforums,.adsghori,.adsgvert,.adside,.adsidebox,.adsider,.adsingle,.adsleft,.adslink,.adslogan,.adsmalltext,.adsmessage,.adsnippet_widget,.adspace-MR,.adspace-widget,.adspace180,.adspace_bottom,.adspace_buysell,.adspace_rotate,.adspace_skyscraper,.adspacer,.adspot,.adspot728x90,.adstextpad,.adstitle,.adstop,.adstory,.adstrip,.adtag,.adtech,.adtext_gray,.adtext_horizontal,.adtext_onwhite,.adtext_vertical,.adtile,.adtips,.adtips1,.adtop,.adtravel,.adtxt,.adtxtlinks,.adunit,.adv-mpu,.adver,.adverTag,.adver_cont_below,.advert-300-side,.advert-300x100-side,.advert-728x90,.advert-article-bottom,.advert-bannerad,.advert-box,.advert-head,.advert-iab-300-250,.advert-iab-468-60,.advert-mpu,.advert-skyscraper,.advert-text,.advert-txt,.advert300,.advert300x250,.advert300x440,.advert4,.advert5,.advert8,.advertColumn,.advertCont,.advertContainer,.advertHeadline,.advertRight,.advertText,.advertTitleSky,.advert_468x60,.advert_box,.advert_cont,.advert_djad,.advert_label,.advert_leaderboard,.advert_note,.advert_surr,.advert_top,.advertheader-red,.advertise-here,.advertise-homestrip,.advertise-horz,.advertise-inquiry,.advertise-leaderboard,.advertise-top,.advertise-vert,.advertiseContainer,.advertiseText,.advertise_ads,.advertise_here,.advertise_link,.advertise_link_sidebar,.advertisement-728x90,.advertisement-block,.advertisement-sidebar,.advertisement-space,.advertisement-sponsor,.advertisement-text,.advertisement-top,.advertisement468,.advertisementBox,.advertisementColumnGroup,.advertisementContainer,.advertisementHeader,.advertisementLabel,.advertisementPanel,.advertisement_btm,.advertisement_caption,.advertisement_g,.advertisement_header,.advertisement_horizontal,.advertisement_top,.advertiser-links,.advertisespace_div,.advertising-banner,.advertising-header,.advertising-local-links,.advertising2,.advertisingTable,.advertising_images,.advertisment_two,.advertize,.advertorial,.advertorial-2,.advertorial-promo-box,.advertorialtitle,.adverts-125,.advt,.advt-banner-3,.advt-block,.advt-sec,.advt300,.advt720,.adwordListings,.adwords,.adwordsHeader,.adwrap,.adwrapper-lrec,.adwrapper948,.adzone-footer,.adzone-sidebar,.affiliate-link,.affiliate-sidebar,.affiliateAdvertText,.affinityAdHeader,.afsAdvertising,.after_ad,.agi-adsaleslinks,.alb-content-ad,.alignads,.alt_ad,.anchorAd,.another_text_ad,.answer_ad_content,.aolSponsoredLinks,.aopsadvert,.apiAdMarkerAbove,.apiAds,.archive-ads,.art_ads,.article-ads,.articleAd,.articleAds,.articleAdsL,.articleEmbeddedAdBox,.article_ad,.article_adbox,.article_mpu_box,.article_page_ads_bottom,.articleads,.aseadn,.aux-ad-widget-1,.aux-ad-widget-2,.b-astro-sponsored-links_horizontal,.b-astro-sponsored-links_vertical,.banner-ad,.banner-ads,.banner-adverts,.banner300x100,.banner300x250,.banner468,.bannerAd,.bannerAdWrapper300x250,.bannerAdWrapper730x86,.bannerRightAd,.banner_300x250,.banner_ad,.banner_ad_footer,.banner_ad_leaderboard,.bannerad,.barkerAd,.base-ad-mpu,.base_ad,.base_printer_widgets_AdBreak,.bg-ad-link,.bgnavad,.big-ads,.bigAd,.big_ad,.big_ads,.bigad,.bigad2,.bigbox_ad,.bigboxad,.billboard_ad,.blk_advert,.block-ad,.block-ad300,.block-admanager,.block-ads-bottom,.block-ads-top,.block-adsense,.block-openads,.block-openadstream,.block-openx,.block-thirdage-ads,.block-wtg_adtech,.blockAd,.blockAds,.block_ad_sb_text,.block_ad_sponsored_links,.block_ad_sponsored_links-wrapper,.blockad,.blocked-ads,.blocsponsor,.blog-ad-leader-inner,.blog-ads-container,.blogAd,.blogAdvertisement,.blogArtAd,.blogBigAd,.blog_ad,.blogads,.blox3featuredAd,.body_ad,.body_sponsoredresults_bottom,.body_sponsoredresults_middle,.body_sponsoredresults_top,.bodyads,.bodyads2,.bookseller-header-advt,.bottom-ad,.bottomAd,.bottomAds,.bottom_ad,.bottom_ads,.bottom_adsense,.bottom_sponsor,.bottomad,.bottomadvert,.bottomrightrailAd,.bottomvidad,.box-ad,.box-ad-grey,.box-ads,.box-adsense,.boxAd,.boxAds,.box_ad,.box_ad_container,.box_ad_content,.box_ad_spacer,.box_ad_wrap,.box_ads,.box_advertising,.box_advertisment_62_border,.box_content_ad,.box_content_ads,.boxad,.boxyads,.bps-ad-wrapper,.bps-advertisement,.bps-advertisement-inline-ads,.br-ad,.breakad_container,.brokerad,.bsa_ads,.btm_ad,.btn-ad,.bullet-sponsored-links,.bullet-sponsored-links-gray,.burstContentAdIndex,.busrep_poll_and_ad_container,.buttonAd,.buttonAds,.buttonadbox,.bx_ad,.bx_ad_right,.cA-adStrap,.cColumn-TextAdsBox,.calloutAd,.care2_adspace,.catalog_ads,.category-ad,.category__big_game_container_body_games_advertising,.cb-ad-container,.cb_ads,.cb_footer_sponsor,.cb_navigation_ad,.cbstv_ad_label,.cbzadvert,.cbzadvert_block,.cdAdTitle,.cdmainlineSearchAdParent,.cdsidebarSearchAdParent,.centerAd,.center_ad,.centerad,.centered-ad,.chitikaAdCopy,.cinemabotad,.classifiedAdThree,.clearerad,.cm_ads,.cms-Advert,.cnbc_badge_banner_ad_area,.cnbc_banner_ad_area,.cnn160AdFooter,.cnnAd,.cnnMosaic160Container,.cnnSearchSponsorBox,.cnnStoreAd,.cnnStoryElementBoxAd,.cnnWCAdBox,.cnnWireAdLtgBox,.cnn_728adbin,.cnn_adcntr300x100,.cnn_adcntr728x90,.cnn_adspc336cntr,.cnn_adtitle,.column2-ad,.columnRightAdvert { visibility:hidden !important; display:none !important; } .com-ad-server,.comment-advertisement,.comment_ad_box,.common_advertisement_title,.communityAd,.conTSponsored,.conductor_ad,.confirm_ad_left,.confirm_ad_right,.confirm_leader_ad,.consoleAd,.container-adwords,.containerSqAd,.container_serendipity_plugin_google_adsense,.content-ad,.content-advert,.contentAdFoot,.contentAdsWrapper,.content_ad,.content_ad_728,.content_adsq,.contentad300x250,.contentad_right_col,.contentadcontainer,.contentadleft,.contentads,.contentadstartpage,.contenttextad,.contest_ad,.cp_ad,.cpmstarHeadline,.cpmstarText,.create_ad,.cs-mpu,.cscTextAd,.cse_ads,.cspAd,.ct_ad,.cube-ad,.cubeAd,.cube_ads,.currency_ad,.custom_ads,.cwAdvert,.darla_ad,.dartAdImage,.dart_ad,.dart_tag,.dartadvert,.dartiframe,.dc-ad,.dcAdvertHeader,.deckAd,.deckads,.detailMpu,.detail_ad,.detail_top_advert,.displayAdSlot,.divAd,.divAdright,.divad1,.divad2,.divad3,.divads,.divider_ad,.dmco_advert_iabrighttitle,.downloadAds,.download_ad,.downloadad,.dualAds,.dynamic-ads,.dynamic_ad,.e-ad,.ec-ads,.ec-ads-remove-if-empty,.em-ad,.embed-ad,.entry-body-ad,.entry_sidebar_ads,.entryad,.ez-clientAd,.f_Ads,.feature_ad,.featuredAds,.featuredadvertising,.firstpost_advert_container,.flagads,.flash-advertisement,.flash_ad,.flash_advert,.flashad,.flexiad,.flipbook_v2_sponsor_ad,.floatad,.floated_right_ad,.floatingAds,.fm-badge-ad,.footad,.footer-ad,.footerAd,.footerAdModule,.footerAdslot,.footerTextAd,.footer_ad,.footer_ads,.footer_block_ad,.footer_bottomad,.footer_line_ad,.footer_text_ad,.footerad,.forumtopad,.frn_adbox,.frn_cont_adbox,.frontads,.ft-ad,.ftdAdBar,.ftdContentAd,.full_ad_box,.fullbannerad,.g3rtn-ad-site,.gAdRows,.gAdSky,.gAdvertising,.g_ggl_ad,.ga-ads,.ga-textads-bottom,.ga-textads-top,.gaTeaserAdsBox,.gads,.gads_cb,.gads_container,.gallery_ad,.gam_ad_slot,.gameAd,.gamesPage_ad_content,.gbl_advertisement,.gen_side_ad,.gglAds,.global_banner_ad,.googad,.googads,.google-ad,.google-ad-container,.google-ads,.google-ads-boxout,.google-ads-slim,.google-right-ad,.google-sponsored-ads,.google-sponsored-link,.google468,.google468_60,.googleAd,.googleAd-content,.googleAd-list,.googleAd300x250_wrapper,.googleAdBox,.googleAdSense,.googleAdSenseModule,.googleAd_body,.googleAds,.googleAds_article_page_above_comments,.googleAdsense,.googleContentAds,.googleProfileAd,.googleSearchAd_content,.googleSearchAd_sidebar,.google_ad,.google_ad_wide,.google_add_container,.google_ads,.google_ads_bom_title,.google_ads_content,.googlead,.googleaddiv,.googleaddiv2,.googleads,.googleads_300x250,.googleads_title,.googleafc,.googley_ads,.gpAdBox,.gpAds,.gradientAd,.grey-ad-line,.group_ad,.gsAd,.gsfAd,.gt_ad,.gt_ad_300x250,.gt_ad_728x90,.gt_adlabel,.gutter-ad-left,.gutter-ad-right,.h-ad-728x90-bottom,.h_Ads,.h_ad,.half-ad,.half_ad_box,.hcf-ad-rectangle,.hcf-cms-ad,.hd_advert,.hdr-ads,.header-advert,.headerAds,.headerAdvert,.headerTextAd,.header_ad,.header_ad_div,.header_advertisement,.header_advertisment,.headerad,.headerad-720,.hi5-ad,.highlightsAd,.hm_advertisment,.hn-ads,.home-ad-links,.homeAd,.homeAd1,.homeAd2,.homeAdBoxA,.homeAdBoxBetweenBlocks,.homeAdBoxInBignews,.homeAdSection,.homeMediumAdGroup,.home_ad_bottom,.home_advertisement,.home_mrec_ad,.homead,.homepage-ad,.homepage300ad,.homepageFlexAdOuter,.homepageMPU,.homepage_middle_right_ad,.hor_ad,.horiz_adspace,.horizontalAd,.horizontal_ads,.horizontaltextadbox,.horizsponsoredlinks,.hortad,.houseAd1,.houseAdsStyle,.housead,.hp-col4-ads,.hp2-adtag,.hp_ad_cont,.hp_ad_text,.hp_t_ad,.hp_w_ad,.hpa-ad1,.html-advertisement,.ic-ads,.ico-adv,.idMultiAd,.image-advertisement,.imageads,.imgad,.in-page-ad,.in-story-ads,.in-story-text-ad,.indEntrySquareAd,.indie-sidead,.indy_googleads,.inhousead,.inline-ad,.inline-mpu,.inline-mpu-left,.inlineSideAd,.inline_ad,.inline_ad_title,.inlinead,.inlineadsense,.inlineadtitle,.inlist-ad,.inlistAd,.inner-advt-banner-3,.innerAds,.innerad,.inpostad,.insert_advertisement,.insertad,.insideStoryAd,.inteliusAd_image,.interest-based-ad,.internalAdsContainer,.is24-adplace,.isAd,.islandAd,.islandAdvert,.islandad,.jimdoAdDisclaimer,.jp-advertisment-promotional,.js-advert,.kw_advert,.kw_advert_pair,.l_ad_sub,.l_banner.ads_show_if,.labelads,.largeRecAdNewsContainerRight,.largeRectangleAd,.largeUnitAd,.lastRowAd,.lcontentbox_ad,.leaderAdSlot,.leaderAdTop,.leaderAdvert,.leaderBoardAdHolder,.leaderOverallAdArea,.leader_ad,.leaderboardAd,.leaderboardad,.leaderboardadtop,.left-ad,.leftAd,.leftAdColumn,.leftAds,.left_ad,.left_ad_box,.left_adlink,.left_ads,.left_adsense,.leftad,.leftadtag,.leftbar_ad_160_600,.leftbarads,.leftbottomads,.leftnavad,.lgRecAd,.lg_ad,.ligatus,.linead,.link_adslider,.link_advertise,.live-search-list-ad-container,.ljad,.local-ads,.log_ads,.logoAds,.logoad,.logoutAd,.longAd,.longAdBox,.lowerAds,.m-ad-tvguide-box,.m4-adsbygoogle,.m_banner_ads,.macAd,.macad,.main-ad,.main-advert,.main-tabs-ad-block,.main_ad,.main_ad_bg_div,.main_adbox,.main_intro_ad,.map_media_banner_ad,.marginadsthin,.marketing-ad,.masthead_topad,.matador_sidebar_ad_600,.mdl-ad,.media-advert,.mediaAd,.mediaAdContainer,.mediaResult_sponsoredSearch,.medium-rectangle-ad,.mediumRectangleAdvert,.medrect_ad,.menuItemBannerAd,.menueadimg,.messageBoardAd,.mf-ad300-container,.micro_ad,.mid_ad,.midad,.middleAds,.min_navi_ad,.mini-ad,.miniad,.mmcAd_Iframe,.mobile-sponsoring,.mod-ad-lrec,.mod-ad-n,.mod-adopenx,.mod-vertical-ad,.mod_admodule,.module-ad-small,.module-ads,.moduleAdvertContent,.module_ad,.module_box_ad,.modulegad,.moduletable-advert,.moduletable-googleads,.moduletablesquaread,.mpu-ad,.mpu-advert,.mpu-footer,.mpu-fp,.mpu-title,.mpu-top-left,.mpu-top-left-banner,.mpu-top-right,.mpu01,.mpuAd,.mpuAdSlot,.mpuAdvert,.mpuArea,.mpuBox,.mpuContainer,.mpuHolder,.mpuTextAd,.mpu_ad,.mpu_advert,.mpu_container,.mpu_gold,.mpu_holder,.mpu_platinum,.mpu_side,.mpu_text_ad,.mpuad,.mpuholderportalpage,.mrec_advert,.ms-ads-link,.msfg-shopping-mpu,.mvw_onPageAd1,.mwaads,.my-ad250x300,.nSponsoredLcContent,.nSponsoredLcTopic,.nadvt300,.narrow_ad_unit,.narrow_ads,.navAdsBanner,.navBads,.nav_ad,.navadbox,.navi_ad300,.naviad,.nba300Ad,.nbaT3Ad160,.nbaTVPodAd,.nbaTwo130Ads,.nbc_ad_carousel_wrp,.newTopAdContainer,.newad,.newsAd,.news_article_ad_google,.newsviewAdBoxInNews,.nf-adbox,.nn-mpu,.noAdForLead,.normalAds,.nrAds,.nsAdRow,.oas-ad,.oas-bottom-ads,.offer_sponsoredlinks,.oio-banner-zone,.oio-link-sidebar,.oio-zone-position,.on_single_ad_box,.onethirdadholder,.openads,.openadstext_after,.openx,.openx-ad,.osan-ads,.other_adv2,.outermainadtd1,.ovAdPromo,.ovAdSky,.ovAdartikel,.ov_spns,.pageGoogleAd,.pageGoogleAdFlat,.pageLeaderAd,.page_content_right_ad,.pagead,.pagenavindexcontentad,.paneladvert,.partner-ads-container,.partnersTextLinks,.pencil_ad,.player_ad_box,.player_hover_ad,.player_page_ad_box,.plista_inimg_box,.pnp_ad,.pod-ad-300,.podRelatedAdLinksWidget,.podSponsoredLink,.portalCenterContentAdBottom,.portalCenterContentAdMiddle,.portalCenterContentAdTop,.portalcontentad,.postAd,.post_ad,.post_ads,.post_sponsor_unit,.postbit_adbit_register,.postbit_adcode,.postgroup-ads,.postgroup-ads-middle,.prebodyads,.premium_ad_container,.promoAd,.promoAds,.promo_ad,.ps-ligatus_placeholder,.publication-ad,.publicidad,.puff-advertorials,.qa_ad_left,.qm-ad-content,.qm-ad-content-news,.quigo-ad,.qzvAdDiv,.r_ad_1,.r_ad_box,.r_ads,.rad_container,.rect_ad_module,.rectad,.rectangle-ad,.rectangleAd,.rectanglead,.redads_cont,.regular_728_ad,.regularad,.relatedAds,.related_post_google_ad,.remads,.resourceImagetAd,.result_ad,.results_sponsor,.results_sponsor_right,.reviewMidAdvertAlign,.rght300x250,.rhads,.rhs-ad,.rhs-ads-panel,.right-ad,.right-ad-holder,.right-ad2,.right-ads,.right-ads2,.right-sidebar-box-ad,.rightAdBox,.rightColAd,.rightColumnRectAd,.rightRailAd,.right_ad,.right_ad_160,.right_ad_box,.right_ad_common_block,.right_ad_text,.right_ad_top,.right_ads,.right_col_ad,.right_hand_advert_column,.right_side-partyad,.rightad_1,.rightad_2,.rightadbox1,.rightads,.rightadunit,.rightcol_boxad,.rightcoladvert,.rightcoltowerad,.rnav_ad,.rngtAd,.roundedCornersAd,.roundingrayboxads,.rt_ad1_300x90,.rt_ad_300x250,.rt_ad_call,.s2k_ad,.savvyad_unit,.sb-ad-sq-bg,.sbAd,.sbAdUnitContainer,.sb_ad_holder,.sb_adsN,.sb_adsNv2,.sb_adsW,.sb_adsWv2,.scanAd,.scc_advert,.sci-ad-main,.sci-ad-sub,.search-ad,.search-results-ad,.search-sponsor,.search-sponsored,.searchAd,.searchAds,.searchSponsoredResultsBox,.searchSponsoredResultsList,.search_column_results_sponsored,.search_results_sponsored_top,.section-ad2,.section-sponsor,.section_mpu_wrapper,.section_mpu_wrapper_wrapper,.selfServeAds,.sepContentAd,.serp_sponsored,.servsponserLinks,.shoppingGoogleAdSense,.showAd_No,.showAd_Yes,.showcaseAd,.sidbaread,.side-ad,.side-ads,.side-sky-banner-160,.sideAd,.sideBoxAd,.side_ad,.side_ad2,.side_ad_1,.side_ad_2,.side_ad_3,.sidead,.sideads,.sideadsbox,.sideadvert,.sidebar-ad,.sidebar-ads,.sidebar-text-ad,.sidebarAd,.sidebarAdUnit,.sidebarAdvert,.sidebar_ad,.sidebar_ad_300_250,.sidebar_ads,.sidebar_ads_336,.sidebar_adsense,.sidebar_box_ad,.sidebarad,.sidebarad_bottom,.sidebaradbox,.sidebarads,.sidebarboxad,.sideheadnarrowad,.sideheadsponsorsad,.singleAd,.singleAdsContainer,.singlead,.site_ad_120_600,.site_ad_300x250,.sitesponsor,.skinAd,.skin_ad_638,.sky-ad,.skyAd,.skyAdd,.skyAdvert,.sky_scraper_ad,.skyad,.skyjobsadtext,.skyscraper-ad,.skyscraper_ad,.skyscraper_bannerAdHome,.sleekadbubble,.slideshow-ad,.slpBigSlimAdUnit,.slpSquareAdUnit,.sm_ad,.smallSkyAd1,.smallSkyAd2,.small_ad,.small_ads,.smallad-left,.smallads,.smallsponsorad,.smart_ads_bom_title,.specialAd175x90,.speedyads,.sphereAdContainer,.spl-ads,.spl_ad,.spl_ad2,.spl_ad_plus,.splitAd,.sponlinkbox,.spons-link,.spons_links,.sponslink,.sponsor-ad,.sponsor-bottom,.sponsor-link,.sponsor-links,.sponsor-right,.sponsor-services,.sponsor-top,.sponsorArea,.sponsorBox,.sponsorPanel,.sponsorPost,.sponsorPostWrap,.sponsorStrip,.sponsorTop,.sponsor_ad_area,.sponsor_footer,.sponsor_horizontal,.sponsor_line,.sponsor_links,.sponsor_logo,.sponsor_top,.sponsor_units,.sponsoradtitle,.sponsorbox,.sponsored-ads,.sponsored-chunk,.sponsored-editorial,.sponsored-features,.sponsored-links,.sponsored-links-alt-b,.sponsored-links-holder,.sponsored-links-right,.sponsored-post,.sponsored-post_ad,.sponsored-results,.sponsored-right-border,.sponsored-text,.sponsoredBox,.sponsoredInfo,.sponsoredInner,.sponsoredLabel,.sponsoredLink,.sponsoredLinks,.sponsoredLinks2,.sponsoredLinksHeader,.sponsoredProduct,.sponsoredResults,.sponsoredSideInner,.sponsored_ads,.sponsored_box,.sponsored_box_search,.sponsored_by,.sponsored_links,.sponsored_links_title_container,.sponsored_links_title_container_top,.sponsored_links_top,.sponsored_results,.sponsored_well,.sponsoredibbox,.sponsoredlink,.sponsoredlinks,.sponsoredlinkscontainer,.sponsoredresults,.sponsoredtextlink_container_ovt,.sponsorlink,.sponsorlink2,.sponsormsg,.sponsors-box,.sponsors_bar,.sponsors_table,.sponsorshipbox,.sponsortable,.sponsortext,.sport-mpu-box,.spotlightAd,.squareAd,.square_ad,.square_banner_ad,.squared_ad,.ss-ad-mpu,.standard-ad,.start__newest__big_game_container_body_games_advertising,.staticAd,.stock-ticker-ad-tag,.stocks-ad-tag,.store-ads,.story_AD,.story_ad_div,.story_right_adv,.storyad,.storysponsorimage,.subad,.subcontent-ad,.subtitle-ad-container,.sugarad,.super-ad,.supercommentad_left,.supercommentad_right,.supp-ads,.supportAdItem,.surveyad,.t10ad,.tab_ad,.tab_ad_area,.tablebordersponsor,.tadsanzeige,.tadsbanner,.tadselement,.tallad,.tblTopAds,.tbl_ad,.tbox_ad,.td-Adholder,.teaser-sponsor,.teaserAdContainer,.teaser_adtiles,.text-ad-links,.text-advertisement,.text-g-advertisement,.text-g-group-short-rec-ad,.text-g-net-grp-google-ads-article-page,.textAd,.textAdBox,.textAds,.text_ad,.text_ads,.textad,.textadContainer,.textad_headline,.textadbox,.textadheadline,.textadlink,.textadsds,.textadsfoot,.textadtext,.textlink-ads,.tf_page_ad_search,.thisIsAd,.thisIsAnAd,.ticket-ad,.tileAds,.tips_advertisement,.title-ad,.title_adbig,.tncms-region-ads,.toolad,.toolbar-ad,.top-ad,.top-ad-space,.top-ads,.top-banner-ad,.top-menu-ads,.top-sponsors,.topAdWrap,.topAdvertisement,.topBannerAd,.topLeaderboardAd,.top_Ad,.top_ad,.top_ad_728,.top_ad_728_90,.top_ad_disclaimer,.top_ad_div,.top_ad_post,.top_ad_wrapper,.top_advert,.top_advertising_lb,.top_container_ad,.top_sponsor,.topad-bar,.topadbox,.topadspot,.topadvertisementsegment,.topcontentadvertisement,.topic_inad,.topstoriesad,.toptenAdBoxA,.tourFeatureAd,.towerAd,.towerAdLeft,.towerAds,.tower_ad,.tower_ad_disclaimer,.towerad,.tribal-ad,.ts-ad_unit_bigbox,.ts-banner_ad,.ttlAdsensel,.tto-sponsored-element,.tucadtext,.tvs-mpu,.twoColumnAd,.twoadcoll,.twoadcolr,.tx_smartadserver_pi1,.txt-ads,.txtAd,.txtAds,.txt_ads,.txtadvertise,.type_adscontainer,.type_miniad,.type_promoads,.ukAds,.undertimyads,.unit-ad,.universalboxADVBOX01,.universalboxADVBOX03,.universalboxADVBOX04a,.usenext,.vertad,.vertical-adsense,.videoAd,.videoBoxAd,.video_ad,.view-promo-mpu-right,.view_rig_ad,.virgin-mpu,.wa_adsbottom,.wantads,.wide-ad,.wide-skyscraper-ad,.wideAd,.wideAdTable,.wide_ad,.wide_ad_unit_top,.wide_ads,.wide_google_ads,.widget-ad,.widget-ad300x250,.widget-entry-ads-160,.widgetYahooAds,.widget_ad,.widget_ad_rotator,.widget_island_ad,.widget_sdac_bottom_ad_widget,.widget_sdac_footer_ads_widget,.widget_sdac_skyscraper_ad_widget,.widget_sponsor,.wikia-ad,.wikia_ad_placeholder,.wingadblock,.withAds,.wl-ad,.wnMultiAd,.wp125_write_ads_widget,.wp125ad,.wp125ad_2,.wpn_ad_content,.wrap-ads,.wsSponsoredLinksRight,.wsTopSposoredLinks,.x03-adunit,.x04-adunit,.xads-blk2,.xads-ojedn,.y-ads,.y-ads-wide,.y7-advertisement,.yahoo-sponsored,.yahoo-sponsored-links,.yahooAds,.yahoo_ads,.yan-sponsored,.ygrp-ad,.yrail_ad_wrap,.yrail_ads,.ysmsponsor,.ysponsor,.yw-ad,a[href^="http://ad.doubleclick.net/"],a[href^="http://adserving.liveuniversenetwork.com/"],a[href^="http://galleries.pinballpublishernetwork.com/"],a[href^="http://galleries.securewebsiteaccess.com/"],a[href^="http://install.securewebsiteaccess.com/"],a[href^="http://latestdownloads.net/download.php?"],a[href^="http://secure.signup-page.com/"],a[href^="http://secure.signup-way.com/"],a[href^="http://www.FriendlyDuck.com/AF_"],a[href^="http://www.adbrite.com/mb/commerce/purchase_form.php?"],a[href^="http://www.friendlyduck.com/AF_"],a[href^="http://www.google.com/aclk?"],a[href^="http://www.liutilities.com/aff"],a[href^="http://www.liutilities.com/products/campaigns/adv/"],a[href^="http://www.my-dirty-hobby.com/?sub="],a[href^="http://www.ringtonematcher.com/"],#mclip_container:last-child,#tads.c,#tadsb.c,.ch[onclick="ga(this,event)"],.ra[align="left"][width="30%"],.ra[align="right"][width="30%"],*[src^="http://go.arbopl.bbelements.com/logos/"],[src*="sixsigmatraffic.com"],embed[flashvars*="AdID"],#Ad1,#AdHeader,#Adbanner,#AdvertiseFrame,#Advertisement,#Advertisements,#Tadspacehead,#TopAd,#ad-container,#ad-header,#ad-top,#ad-wrapper,#ad1,#ad3 { visibility:hidden !important; display:none !important; } #ad728x90,#adBanner,#adComponentWrapper,#adContainer,#adDiv,#adHeader,#adTop,#adWrapper,#ad_area,#ad_container,#ad_leader,#ad_space,#ad_square,#ad_table,#ad_wrapper,#adbody,#adbox,#adposition3,#adsense,#adsense_inline,#adspace,#advert,#advertise,#advertising,#adverts,#adwrapper,#bannerad,#block_advert,#contentAd,#content_ad,#divAd,#featuread,#footer_ad,#footer_ads,#googlead,#head-ad,#header_ad,#mainAd,#middleads,#printads,#promo-ad,#right_ad,#sidebar-ads,#sidebar_ads,#sponsored,#topAd,#topBannerAd,#top_ad,#topad,#topads,.AdBox,.AdInfo,.AdSense,.AdTitle,.Ads,.Advert,.ad-box,.ad-button,.ad-container,.ad-content,.ad-display,.ad-holder,.ad-sidebar,.ad-text,.ad-vertical-container,.ad1,.ad2,.ad468,.adBox,.adContainer,.adDiv,.adElement,.adHolder,.adModule,.adSpace,.adSummary,.adText,.adTitle,.ad_Right,.ad_header,.ad_links,.ad_right,.ad_space,.ad_text,.adbox,.adcol1,.adcol2,.adcont,.addiv,.adframe,.adholder,.adinfo,.adlink,.adlist,.adpic,.adright,.ads-section,.adsBlock,.adspace,.adtable,.adtext,.advert-horizontal,.advert_list,.advertise,.advertisement,.advertiser,.advertising,.advertising_block,.advertisment,.adverts,.adwrapper,.affiliate,.banner_728x90,.block_ad,.bottom_ad_block,.contentAd,.contentad,.detail-ads,.header-ad,.headerAd,.header_ad_center,.horizontal_ad,.middleads,.module-ad,.mpu,.post-ad,.rightAd,.right_ads_column,.rightad,.sky_ad,.sponsored,.sponsors,.textads,.topAd,.topAds,.top_ads,.topad,.topads,a[href^="http://ad-emea.doubleclick.net/"],banner.swf { visibility:hidden !important; display:none !important; }</style></html>

@@ -1,0 +1,119 @@
+/*
+Style sheet by Iain Murray 2002-10
+http://www.iainmurray.net
+
+Intended for screen media only with some tweaks for display on small screens
+(phones). Mess with printing and you're asking for trouble.
+Include in HTML 4.0 like this:
+<LINK rel="stylesheet" type="text/css" media="screen" href="new.css">
+
+I used to include hacks to support Netscape 4.
+I think that Netscape 4 has now totally disappeared.
+
+When I was originally looking at style sheets I read:
+http://diveintoaccessibility.org/
+http://www.w3.org/TR/WCAG10-CSS-TECHS/
+http://www.realworldstyle.com
+*/
+
+body {
+color : #000000;
+background-color : #ffffff;
+}
+
+a:link { color: #4686c2; }
+a:visited { color: #808080; }
+a:hover { color: #0000ff; background-color: #eeeeee;}
+
+.content {
+background-color : White;
+font-family : 'Lucida Grande', Verdana, Geneva, Lucida, Arial, Helvetica, sans-serif;
+text-align: left;
+padding-left: 2ex;
+max-width: 41em;
+/* I used to think full justification on webpages was cool, but without decent
+ * hyphenation and better layout it can be really bad.*/
+text-align: left;
+}
+
+.keeptogether { white-space:nowrap; }
+@media handheld, only screen and (max-width:480px) {
+.content { padding-left: 0; }
+.keeptogether { white-space:normal; }
+}
+
+.content h1 {
+border-bottom : 2px solid #4686c2;
+font-size : 150%;
+background : #eeeeee;
+margin-top: 2ex;
+}
+
+.content h2 {
+font-size : 110%;
+border-bottom : 1px solid #4686c2;
+}
+
+.content h3 {
+font-size : 100%;
+border-bottom : 1px solid #4686c2;
+}
+
+.content h1:target { background-color : #ccccff; }
+.content h2:target { background-color : #ccccff; }
+.content h3:target { background-color : #ccccff; }
+
+.content .footer {
+text-align: right;
+font-size: 80%;
+color: #808080;
+margin: 0;
+padding-bottom: 0;
+}
+
+.content .footnote {
+font-size: 80%;
+color: #808080;
+padding : 4ex;
+}
+
+.content hr{
+/* Yes, this is (or was) all needed to get a coloured rule to work
+simultaneously in IE, Netscape and Opera. */
+color : #4686c2;
+background-color : #4686c2;
+height : 2px;
+border: 0 solid #4686c2;
+}
+
+.content .caption {
+font-style : italic;
+background-color : #d4d4f9;
+border : 1px solid #ffffff;
+font-style : normal;
+margin : 2ex;
+padding : 2ex;
+}
+
+acronym {
+border-bottom: 1px dotted black;
+}
+
+p.nav {
+text-align: right;
+font-size : 80%;
+}
+
+span.red {
+color: #ff0000;
+}
+
+li {
+text-align: left;
+margin-top: 0.2em;
+}
+
+.spaced li {
+margin: 0.9em 3em 0em 1em;
+}
+

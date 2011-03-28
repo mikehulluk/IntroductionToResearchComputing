@@ -1,0 +1,10 @@
+/* Print style sheet, Iain Murray 2002-10
+
+Do little style for printing. Saves colour ink, and generally less risky.
+Could hide navigation clutter if I had any.
+*/
+
+/* Mark Pilgrim cleverness */
+acronym:after {
+  content: " (" attr(title) ")";
+}
